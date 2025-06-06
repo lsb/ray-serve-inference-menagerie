@@ -1,0 +1,32 @@
+# Core Ray Serve dependencies
+ray[serve]==2.5.1
+
+# ML model dependencies
+torch==2.0.1
+torchvision==0.15.2
+transformers==4.50.0
+
+# Image processing
+pillow==9.5.0
+
+# HTTP and API
+requests==2.31.0
+fastapi
+uvicorn[standard]
+
+# Development dependencies (TODO: move to requirements-dev.txt)
+pytest>=6.0
+pytest-asyncio
+pytest-cov
+black
+flake8
+mypy
+yamllint
+
+# Kubernetes client (for testing)
+kubernetes
+
+# TODO: Add specific versions for all dependencies
+# TODO: Split into requirements.txt and requirements-dev.txt
+# TODO: Add SAM2 and Grounding DINO specific dependencies
+# TODO: Consider using poetry or pipenv for better dependency management

@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: clip-service
+  labels:
+    app: clip-service
+spec:
+  replicas: 1  # start with a single replica; scale out as needed
+  selector:
+    matchLabels:
+      app: clip-service
+  template:
+    metadata:
+      labels:
+        app: clip-service
+      annotations:
+        sidecar.istio.io/inject: "false"
+    spec:
+      nodeSelector:
+        accelerator: "nvidia-tesla-t4"
+      containers:
+      - name: clip-service
+        image: YOUR_REGISTRY/clip-service:latest  # use the built image name/tag
+        imagePullPolicy: IfNotPresent
+        ports:
+          - containerPort: 8000   # Ray Serve HTTP port inside container
+        resources:
+          limits:
+            nvidia.com/gpu: 1     # request one GPU
+            memory: 4Gi
+            cpu: 1
+          requests:
+            nvidia.com/gpu: 1
+            memory: 4Gi
+            cpu: 0.5
