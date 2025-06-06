@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gemma-service
+  namespace: ray-serve-test
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gemma-service
+  template:
+    metadata:
+      labels:
+        app: gemma-service
+    spec:
+      nodeSelector:
+        accelerator: "nvidia-tesla-t4"
+      tolerations:
+        - key: "nvidia.com/gpu"
+          operator: "Exists"
+          effect: "NoSchedule"
+      containers:
+      - name: gemma-service
+        image: python:3.10-slim
+        command: ["/bin/bash", "-c"]
+        args:
+          - |
+            pip install torch==2.7.0 transformers==4.52.4 Pillow requests fastapi uvicorn python-multipart ray[serve]==2.46.0 &&
+            cd /app &&
+            python app.py
+        ports:
+        - containerPort: 8000
+        volumeMounts:
+        - name: app-code
+          mountPath: /app
+        resources:
+          requests:
+            cpu: 1
+            memory: 4Gi
+            nvidia.com/gpu: 1
+          limits:
+            cpu: 2
+            memory: 8Gi
+            nvidia.com/gpu: 1
+      volumes:
+      - name: app-code
+        configMap:
+          name: gemma-service-code
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gemma-service-svc
+  namespace: ray-serve-test
+spec:
+  selector:
+    app: gemma-service
+  ports:
+    - name: http
+      port: 8000
+      targetPort: 8000
+  type: ClusterIP
