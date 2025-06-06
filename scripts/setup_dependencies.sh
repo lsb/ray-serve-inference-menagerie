@@ -66,7 +66,7 @@ setup_python_env() {
     pip install --upgrade pip
     
     echo "Installing Python dependencies..."
-    pip install -r requirements.txt
+    pip install -r clip-service/requirements.txt
     
     if [[ "${1:-}" == "--dev" ]]; then
         echo "Installing development dependencies..."
