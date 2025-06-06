@@ -210,10 +210,6 @@ class TestCLIPService:
         
         try:
             cat_response = requests.post(service_url, json=cat_payload, timeout=30)
-            if cat_response.status_code != 200:
-                cat_payload["image_url"] = "https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/transformers/tasks/cat.jpg"
-                cat_response = requests.post(service_url, json=cat_payload, timeout=30)
-            
             assert cat_response.status_code == 200
             cat_result = cat_response.json()
             assert "predictions" in cat_result
@@ -239,10 +235,6 @@ class TestCLIPService:
             }
             
             dog_response = requests.post(service_url, json=dog_payload, timeout=30)
-            if dog_response.status_code != 200:
-                dog_payload["image_url"] = "https://images.unsplash.com/photo-1552053831-71594a27632d?w=400"
-                dog_response = requests.post(service_url, json=dog_payload, timeout=30)
-            
             assert dog_response.status_code == 200
             dog_result = dog_response.json()
             assert "predictions" in dog_result
