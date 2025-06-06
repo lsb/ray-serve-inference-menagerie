@@ -1,34 +1,153 @@
-import os, time, signal, asyncio
+import os
+import time
+import signal
+import asyncio
+import base64
+import io
+from typing import Dict, Any, List
 import ray
 from ray import serve
 import torch
 from transformers import pipeline
+from fastapi import FastAPI
+from fastapi.responses import JSONResponse
+from PIL import Image
 
-ray.init()  # Starts a local Ray runtime (or connects to one if specified by environment)
-serve.start(detached=True, http_options={"host": "0.0.0.0", "port": int(os.environ.get("PORT", 8000))})
+app = FastAPI(title="CLIP Service", description="Zero-shot image classification using CLIP")
 
-clip_pipeline = pipeline(
-    "zero-shot-image-classification",
-    model="openai/clip-vit-base-patch32",
-    device=0 if torch.cuda.is_available() else -1,  # use GPU if available
+@serve.deployment(
+    ray_actor_options={"num_gpus": 1 if torch.cuda.is_available() else 0}
 )
-
-@serve.deployment(route_prefix="/", ray_actor_options={"num_gpus": 1})
+@serve.ingress(app)
 class CLIPService:
     def __init__(self):
-        self.pipeline = clip_pipeline
-    async def __call__(self, request):
-        data = await request.json()
-        image_url = data.get("image_url")
-        candidate_labels = data.get("labels")
-        if not image_url or not candidate_labels:
-            return {"error": "Provide 'image_url' and 'labels' in request JSON."}
-        result = self.pipeline(image_url, candidate_labels=candidate_labels)
-        return result  # e.g., list of {"label": ..., "score": ...} dicts
+        self.device_info = self._get_device_info()
+        self.pipeline = self._initialize_pipeline()
+        print(f"CLIP Service initialized with device: {self.device_info}")
+    
+    def _get_device_info(self) -> Dict[str, Any]:
+        """Get device information for performance debugging."""
+        device_info = {
+            "cuda_available": torch.cuda.is_available(),
+            "device_count": torch.cuda.device_count() if torch.cuda.is_available() else 0,
+            "device_name": None,
+            "device_type": "cpu"
+        }
+        
+        if torch.cuda.is_available():
+            device_info["device_name"] = torch.cuda.get_device_name(0)
+            device_info["device_type"] = "gpu"
+        
+        return device_info
+    
+    def _initialize_pipeline(self):
+        """Initialize CLIP pipeline with appropriate device."""
+        device = 0 if torch.cuda.is_available() else -1
+        return pipeline(
+            "zero-shot-image-classification",
+            model="openai/clip-vit-base-patch32",
+            device=device
+        )
+    
+    @app.get("/health")
+    async def health_check(self):
+        """Health check endpoint."""
+        return {
+            "status": "healthy",
+            "service": "clip",
+            "device_info": self.device_info
+        }
+    
+    @app.post("/")
+    async def classify_image(self, request_data: Dict[str, Any]) -> JSONResponse:
+        """Main classification endpoint."""
+        start_time = time.time()
+        
+        try:
+            image_data = request_data.get("image")
+            candidate_labels = request_data.get("labels")
+            
+            if not image_data or not candidate_labels:
+                return JSONResponse(
+                    status_code=400,
+                    content={"error": "Provide 'image' (base64-encoded) and 'labels' in request JSON."}
+                )
+            
+            if not isinstance(candidate_labels, list) or len(candidate_labels) == 0:
+                return JSONResponse(
+                    status_code=400,
+                    content={"error": "Labels must be a non-empty list."}
+                )
+            
+            try:
+                image_bytes = base64.b64decode(image_data)
+                image = Image.open(io.BytesIO(image_bytes))
+                
+                if image.mode != 'RGB':
+                    image = image.convert('RGB')
+                    
+            except Exception as e:
+                return JSONResponse(
+                    status_code=400,
+                    content={
+                        "error": f"Invalid base64 image data: {str(e)}",
+                        "performance": {
+                            "error_time_ms": round((time.time() - start_time) * 1000, 2),
+                            "device_info": self.device_info
+                        }
+                    }
+                )
+            
+            inference_start = time.time()
+            result = self.pipeline(image, candidate_labels=candidate_labels)
+            inference_time = time.time() - inference_start
+            
+            total_time = time.time() - start_time
+            
+            response = {
+                "predictions": result,
+                "performance": {
+                    "total_time_ms": round(total_time * 1000, 2),
+                    "inference_time_ms": round(inference_time * 1000, 2),
+                    "device_info": self.device_info
+                }
+            }
+            
+            return JSONResponse(content=response)
+            
+        except Exception as e:
+            error_time = time.time() - start_time
+            return JSONResponse(
+                status_code=500,
+                content={
+                    "error": f"Classification failed: {str(e)}",
+                    "performance": {
+                        "error_time_ms": round(error_time * 1000, 2),
+                        "device_info": self.device_info
+                    }
+                }
+            )
 
-CLIPService.deploy()
-
-signal.signal(signal.SIGTERM, lambda sig, frame: exit(0))
-print("CLIP service is running on Ray Serve (port {}), awaiting requests...".format(os.environ.get("PORT", 8000)))
-while True:
-    time.sleep(60)
+if __name__ == "__main__":
+    import signal
+    import time
+    
+    ray.init()
+    serve.start(http_options={"host": "0.0.0.0", "port": int(os.environ.get("PORT", 8000))})
+    serve.run(CLIPService.bind())
+    
+    def signal_handler(sig, frame):
+        serve.shutdown()
+        ray.shutdown()
+        exit(0)
+    
+    signal.signal(signal.SIGTERM, signal_handler)
+    signal.signal(signal.SIGINT, signal_handler)
+    
+    print(f"CLIP service is running on port {os.environ.get('PORT', 8000)}")
+    
+    try:
+        while True:
+            time.sleep(60)
+    except KeyboardInterrupt:
+        signal_handler(None, None)

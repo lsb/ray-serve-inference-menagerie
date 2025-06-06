@@ -1,0 +1,54 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: clip-service
+  namespace: ray-serve-test
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: clip-service
+  template:
+    metadata:
+      labels:
+        app: clip-service
+    spec:
+      containers:
+      - name: clip-service
+        image: python:3.10-slim
+        command: ["/bin/bash", "-c"]
+        args:
+          - |
+            pip install torch==2.7.0 transformers==4.52.4 Pillow requests fastapi uvicorn python-multipart ray[serve]==2.46.0 &&
+            cd /app &&
+            python app.py
+        ports:
+        - containerPort: 8000
+        volumeMounts:
+        - name: app-code
+          mountPath: /app
+        resources:
+          requests:
+            cpu: 1
+            memory: 2Gi
+          limits:
+            cpu: 2
+            memory: 4Gi
+      volumes:
+      - name: app-code
+        configMap:
+          name: clip-service-code
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: clip-service-svc
+  namespace: ray-serve-test
+spec:
+  selector:
+    app: clip-service
+  ports:
+    - name: http
+      port: 8000
+      targetPort: 8000
+  type: ClusterIP
