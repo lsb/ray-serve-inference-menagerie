@@ -1,0 +1,42 @@
+#!/bin/bash
+
+set -e
+
+NAMESPACE="ray-serve-test"
+MINIKUBE_PROFILE="ray-serve-menagerie"
+
+echo "Deploying CLIP service to Minikube for testing..."
+
+kubectl config use-context "$MINIKUBE_PROFILE"
+
+echo "Applying CLIP RayService manifest..."
+kubectl apply -f k8s-manifests/clip-rayservice.yaml
+
+echo "Waiting for CLIP service to be ready..."
+kubectl wait --for=condition=ready rayservice/clip-service -n "$NAMESPACE" --timeout=300s
+
+echo "Waiting for Ray cluster pods to be running..."
+kubectl wait --for=condition=ready pod -l rayCluster=clip-service -n "$NAMESPACE" --timeout=300s
+
+echo "CLIP service deployment status:"
+kubectl get rayservice clip-service -n "$NAMESPACE"
+kubectl get pods -l rayCluster=clip-service -n "$NAMESPACE"
+
+echo "Setting up port forwarding..."
+kubectl port-forward svc/clip-service-svc 8000:8000 -n "$NAMESPACE" &
+PORT_FORWARD_PID=$!
+
+sleep 5
+
+echo "CLIP service deployed successfully!"
+echo ""
+echo "Service is available at: http://localhost:8000"
+echo "Health check: curl http://localhost:8000/health"
+echo ""
+echo "To stop port forwarding: kill $PORT_FORWARD_PID"
+echo "To run tests: ./scripts/test_local.sh"
+echo ""
+echo "Useful commands:"
+echo "  kubectl logs -f deployment/clip-service-raycluster-head -n $NAMESPACE"
+echo "  kubectl get rayservice -n $NAMESPACE"
+echo "  kubectl describe rayservice clip-service -n $NAMESPACE"

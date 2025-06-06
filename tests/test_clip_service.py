@@ -2,6 +2,7 @@ import pytest
 import requests
 import json
 import time
+import os
 from typing import Dict, Any
 
 class TestCLIPService:
@@ -21,6 +22,23 @@ class TestCLIPService:
     def sample_labels(self) -> list:
         """Sample labels for zero-shot classification."""
         return ["food", "animal", "vehicle", "building", "person"]
+    
+    @pytest.fixture(scope="class")
+    def cat_image_path(self) -> str:
+        """Path to local cat sample image."""
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        project_root = os.path.dirname(script_dir)
+        return os.path.join(project_root, "sample_data", "cats_on_desk", "cat_on_desk_01.png")
+    
+    @pytest.fixture(scope="class")
+    def cat_vs_dog_labels(self) -> list:
+        """Labels for cat vs dog classification test."""
+        return ["a photo of a cat", "a photo of a dog"]
+    
+    @pytest.fixture(scope="class")
+    def inside_vs_outside_labels(self) -> list:
+        """Labels for inside vs outside classification test."""
+        return ["inside", "outside"]
     
     def test_service_health(self, service_url: str):
         """Test that the service is running and responsive."""
@@ -160,3 +178,148 @@ class TestCLIPService:
         print(f"Average response time: {avg_response_time:.2f} seconds")
         
         assert avg_response_time < 10.0
+    
+    def test_cat_vs_dog_classification(self, service_url: str, cat_image_path: str, cat_vs_dog_labels: list):
+        """Test that CLIP correctly identifies cat images as cats rather than dogs."""
+        if not os.path.exists(cat_image_path):
+            pytest.skip(f"Cat sample image not found at {cat_image_path}")
+        
+        file_url = f"file://{cat_image_path}"
+        
+        payload = {
+            "image_url": file_url,
+            "labels": cat_vs_dog_labels
+        }
+        
+        try:
+            response = requests.post(service_url, json=payload, timeout=30)
+            assert response.status_code == 200
+            
+            result = response.json()
+            assert "predictions" in result
+            assert "performance" in result
+            
+            predictions = result["predictions"]
+            assert len(predictions) == 2
+            
+            cat_score = None
+            dog_score = None
+            for pred in predictions:
+                if "cat" in pred["label"].lower():
+                    cat_score = pred["score"]
+                elif "dog" in pred["label"].lower():
+                    dog_score = pred["score"]
+            
+            assert cat_score is not None, "Cat prediction not found"
+            assert dog_score is not None, "Dog prediction not found"
+            
+            assert cat_score > dog_score, f"Cat score ({cat_score}) should be higher than dog score ({dog_score})"
+            
+            performance = result["performance"]
+            assert "total_time_ms" in performance
+            assert "inference_time_ms" in performance
+            assert "device_info" in performance
+            
+            print(f"Cat vs Dog test passed: cat={cat_score:.3f}, dog={dog_score:.3f}")
+            print(f"Performance: {performance['total_time_ms']}ms total, {performance['inference_time_ms']}ms inference")
+            print(f"Device: {performance['device_info']['device_type']}")
+            
+        except requests.exceptions.ConnectionError:
+            pytest.skip("CLIP service is not running. Start the service to run this test.")
+    
+    def test_inside_vs_outside_classification(self, service_url: str, cat_image_path: str, inside_vs_outside_labels: list):
+        """Test that CLIP correctly identifies cat desk images as inside rather than outside."""
+        if not os.path.exists(cat_image_path):
+            pytest.skip(f"Cat sample image not found at {cat_image_path}")
+        
+        file_url = f"file://{cat_image_path}"
+        
+        payload = {
+            "image_url": file_url,
+            "labels": inside_vs_outside_labels
+        }
+        
+        try:
+            response = requests.post(service_url, json=payload, timeout=30)
+            assert response.status_code == 200
+            
+            result = response.json()
+            assert "predictions" in result
+            assert "performance" in result
+            
+            predictions = result["predictions"]
+            assert len(predictions) == 2
+            
+            inside_score = None
+            outside_score = None
+            for pred in predictions:
+                if pred["label"].lower() == "inside":
+                    inside_score = pred["score"]
+                elif pred["label"].lower() == "outside":
+                    outside_score = pred["score"]
+            
+            assert inside_score is not None, "Inside prediction not found"
+            assert outside_score is not None, "Outside prediction not found"
+            
+            assert inside_score > outside_score, f"Inside score ({inside_score}) should be higher than outside score ({outside_score})"
+            
+            print(f"Inside vs Outside test passed: inside={inside_score:.3f}, outside={outside_score:.3f}")
+            
+        except requests.exceptions.ConnectionError:
+            pytest.skip("CLIP service is not running. Start the service to run this test.")
+    
+    def test_all_cat_images_classification(self, service_url: str, cat_vs_dog_labels: list):
+        """Test CLIP classification on all available cat sample images."""
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        project_root = os.path.dirname(script_dir)
+        cat_dir = os.path.join(project_root, "sample_data", "cats_on_desk")
+        
+        if not os.path.exists(cat_dir):
+            pytest.skip(f"Cat sample directory not found at {cat_dir}")
+        
+        cat_files = [f for f in os.listdir(cat_dir) if f.endswith(('.png', '.jpg', '.jpeg'))]
+        
+        if not cat_files:
+            pytest.skip("No cat sample images found")
+        
+        successful_tests = 0
+        total_tests = len(cat_files)
+        
+        for cat_file in cat_files:
+            cat_path = os.path.join(cat_dir, cat_file)
+            file_url = f"file://{cat_path}"
+            
+            payload = {
+                "image_url": file_url,
+                "labels": cat_vs_dog_labels
+            }
+            
+            try:
+                response = requests.post(service_url, json=payload, timeout=30)
+                if response.status_code == 200:
+                    result = response.json()
+                    predictions = result["predictions"]
+                    
+                    cat_score = None
+                    dog_score = None
+                    for pred in predictions:
+                        if "cat" in pred["label"].lower():
+                            cat_score = pred["score"]
+                        elif "dog" in pred["label"].lower():
+                            dog_score = pred["score"]
+                    
+                    if cat_score is not None and dog_score is not None and cat_score > dog_score:
+                        successful_tests += 1
+                        print(f"✓ {cat_file}: cat={cat_score:.3f} > dog={dog_score:.3f}")
+                    else:
+                        print(f"✗ {cat_file}: cat={cat_score:.3f} <= dog={dog_score:.3f}")
+                
+            except requests.exceptions.ConnectionError:
+                pytest.skip("CLIP service is not running. Start the service to run this test.")
+            except Exception as e:
+                print(f"Error testing {cat_file}: {e}")
+        
+        success_rate = successful_tests / total_tests
+        assert success_rate >= 0.8, f"Only {successful_tests}/{total_tests} ({success_rate:.1%}) cat images classified correctly"
+        
+        print(f"All cat images test: {successful_tests}/{total_tests} ({success_rate:.1%}) successful")
