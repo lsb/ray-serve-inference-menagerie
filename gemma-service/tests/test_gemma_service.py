@@ -183,10 +183,8 @@ class TestGemmaService:
     
     def test_cat_vs_dog_recognition(self, service_url: str, cat_image_path: str, dog_image_path: str, cat_vs_dog_prompts: list, image_to_base64: Callable[[str], str]):
         """Test that Gemma correctly identifies cat images as cats rather than dogs using local sample images."""
-        if not os.path.exists(cat_image_path):
-            pytest.skip(f"Cat sample image not found at {cat_image_path}")
-        if not os.path.exists(dog_image_path):
-            pytest.skip(f"Dog sample image not found at {dog_image_path}")
+        assert os.path.exists(cat_image_path), f"Cat sample image not found at {cat_image_path}"
+        assert os.path.exists(dog_image_path), f"Dog sample image not found at {dog_image_path}"
         
         cat_base64 = image_to_base64(cat_image_path)
         cat_payload = {
@@ -231,8 +229,7 @@ class TestGemmaService:
     
     def test_inside_vs_outside_classification(self, service_url: str, cat_image_path: str, inside_vs_outside_prompts: list, image_to_base64: Callable[[str], str]):
         """Test that Gemma correctly identifies cat desk images as inside rather than outside."""
-        if not os.path.exists(cat_image_path):
-            pytest.skip(f"Cat sample image not found at {cat_image_path}")
+        assert os.path.exists(cat_image_path), f"Cat sample image not found at {cat_image_path}"
         
         cat_base64 = image_to_base64(cat_image_path)
         payload = {
@@ -258,8 +255,7 @@ class TestGemmaService:
     
     def test_outdoor_scene_classification(self, service_url: str, dog_image_path: str, inside_vs_outside_prompts: list, image_to_base64: Callable[[str], str]):
         """Test that Gemma correctly identifies dog running images as outside rather than inside."""
-        if not os.path.exists(dog_image_path):
-            pytest.skip(f"Dog sample image not found at {dog_image_path}")
+        assert os.path.exists(dog_image_path), f"Dog sample image not found at {dog_image_path}"
         
         dog_base64 = image_to_base64(dog_image_path)
         payload = {
