@@ -148,6 +148,8 @@ def signal_handler(sig, frame):
     ray.shutdown()
     exit(0)
 
+gemma_service = GemmaService.bind()
+
 if __name__ == "__main__":
     import signal
     import time
@@ -155,7 +157,7 @@ if __name__ == "__main__":
     ray.init()
     serve.start(http_options={"host": "0.0.0.0", "port": int(os.environ.get("PORT", 8000))})
     
-    serve.run(GemmaService.bind())
+    serve.run(gemma_service)
     
     signal.signal(signal.SIGTERM, signal_handler)
     signal.signal(signal.SIGINT, signal_handler)
