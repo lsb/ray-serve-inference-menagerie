@@ -2,7 +2,10 @@ import pytest
 import requests
 import json
 import time
+import base64
+import io
 from typing import Dict, Any
+from PIL import Image
 
 class TestGemmaService:
     """Test suite for Gemma3 VLM (Vision-Language Model) service."""
@@ -16,6 +19,15 @@ class TestGemmaService:
     def sample_image_url(self) -> str:
         """Sample image URL for testing."""
         return "https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/beignets-task-guide.png"
+    
+    @pytest.fixture(scope="class")
+    def sample_image_base64(self) -> str:
+        """Sample base64-encoded image for testing."""
+        img = Image.new('RGB', (100, 100), color='red')
+        buffer = io.BytesIO()
+        img.save(buffer, format='PNG')
+        img_bytes = buffer.getvalue()
+        return base64.b64encode(img_bytes).decode('utf-8')
     
     def test_service_health(self, service_url: str):
         """Test that the service is running and responsive."""
@@ -66,8 +78,29 @@ class TestGemmaService:
         assert "performance" in result
         assert isinstance(result["answer"], str)
     
-    def test_gemma_missing_image_url(self, service_url: str):
-        """Test Gemma VLM with missing image URL."""
+    def test_gemma_base64_image(self, service_url: str, sample_image_base64: str):
+        """Test Gemma VLM with base64-encoded image."""
+        payload = {
+            "image": sample_image_base64,
+            "prompt": "Describe what you see in this image."
+        }
+        
+        response = requests.post(service_url, json=payload, timeout=60)
+        assert response.status_code == 200
+        
+        result = response.json()
+        assert "answer" in result
+        assert "performance" in result
+        assert isinstance(result["answer"], str)
+        assert len(result["answer"]) > 0
+        
+        performance = result["performance"]
+        assert "total_time_ms" in performance
+        assert "inference_time_ms" in performance
+        assert "device_info" in performance
+    
+    def test_gemma_missing_image_data(self, service_url: str):
+        """Test Gemma VLM with missing image data."""
         payload = {
             "prompt": "Describe the image."
         }
@@ -76,7 +109,20 @@ class TestGemmaService:
         result = response.json()
         
         assert "error" in result
-        assert "image_url" in result["error"]
+        assert "image" in result["error"] or "image_url" in result["error"]
+    
+    def test_gemma_invalid_base64(self, service_url: str):
+        """Test Gemma VLM with invalid base64 image data."""
+        payload = {
+            "image": "invalid_base64_data",
+            "prompt": "Describe the image."
+        }
+        
+        response = requests.post(service_url, json=payload, timeout=10)
+        result = response.json()
+        
+        assert "error" in result
+        assert "Invalid base64" in result["error"]
     
     def test_gemma_performance_benchmark(self, service_url: str, sample_image_url: str):
         """Benchmark the performance of Gemma VLM."""
