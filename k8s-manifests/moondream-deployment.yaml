@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: moondream-service
+  labels:
+    app: moondream-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: moondream-service
+  template:
+    metadata:
+      labels:
+        app: moondream-service
+      annotations:
+        sidecar.istio.io/inject: "false"
+    spec:
+      nodeSelector:
+        accelerator: "nvidia-tesla-t4"   # update to match your GPU node label
+      containers:
+      - name: moondream-service
+        image: YOUR_REGISTRY/moondream-service:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+          - containerPort: 8000
+        resources:
+          limits:
+            nvidia.com/gpu: 1
+            memory: 16Gi
+            cpu: 2
+          requests:
+            nvidia.com/gpu: 1
+            memory: 16Gi
+            cpu: 1

@@ -71,13 +71,19 @@ def grounding_dino_service_url() -> str:
     return os.environ.get("GROUNDING_DINO_SERVICE_URL", "http://localhost:8002")
 
 @pytest.fixture(scope="session")
+def moondream_service_url() -> str:
+    """URL for the Moondream service."""
+    return os.environ.get("MOONDREAM_SERVICE_URL", "http://localhost:8003")
+
+@pytest.fixture(scope="session")
 def all_services_running(clip_service_url: str, gemma_service_url: str, 
-                        grounding_dino_service_url: str, service_timeout: int) -> bool:
+                        grounding_dino_service_url: str, moondream_service_url: str, service_timeout: int) -> bool:
     """Check if all services are running and accessible."""
     services = {
         "CLIP": clip_service_url,
         "Gemma": gemma_service_url,
-        "Grounding DINO": grounding_dino_service_url
+        "Grounding DINO": grounding_dino_service_url,
+        "Moondream": moondream_service_url
     }
     
     running_services = []
