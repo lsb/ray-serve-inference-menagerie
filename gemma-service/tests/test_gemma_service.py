@@ -74,8 +74,8 @@ class TestGemmaService:
             assert "service" in result
             assert result["service"] == "gemma"
             assert "device_info" in result
-        except requests.exceptions.ConnectionError:
-            pytest.skip("Gemma service is not running. Start the service to run this test.")
+        except requests.exceptions.ConnectionError as e:
+            pytest.fail(f"Gemma service is not accessible at {service_url}: {str(e)}")
     
     def test_gemma_image_description(self, service_url: str, sample_image_url: str):
         """Test Gemma VLM with image description task."""
@@ -224,8 +224,8 @@ class TestGemmaService:
                 print(f"Performance: {performance.get('total_time_ms', 'N/A')}ms total")
                 print(f"Device: {performance.get('device_info', {}).get('device_type', 'unknown')}")
             
-        except requests.exceptions.ConnectionError:
-            pytest.skip("Gemma service is not running. Start the service to run this test.")
+        except requests.exceptions.ConnectionError as e:
+            pytest.fail(f"Gemma service is not accessible at {service_url}: {str(e)}")
     
     def test_inside_vs_outside_classification(self, service_url: str, cat_image_path: str, inside_vs_outside_prompts: list, image_to_base64: Callable[[str], str]):
         """Test that Gemma correctly identifies cat desk images as inside rather than outside."""
@@ -250,8 +250,8 @@ class TestGemmaService:
             
             print(f"Indoor vs Outdoor classification: {result['answer']}")
             
-        except requests.exceptions.ConnectionError:
-            pytest.skip("Gemma service is not running. Start the service to run this test.")
+        except requests.exceptions.ConnectionError as e:
+            pytest.fail(f"Gemma service is not accessible at {service_url}: {str(e)}")
     
     def test_outdoor_scene_classification(self, service_url: str, dog_image_path: str, inside_vs_outside_prompts: list, image_to_base64: Callable[[str], str]):
         """Test that Gemma correctly identifies dog running images as outside rather than inside."""
@@ -276,5 +276,5 @@ class TestGemmaService:
             
             print(f"Outdoor scene classification: {result['answer']}")
             
-        except requests.exceptions.ConnectionError:
-            pytest.skip("Gemma service is not running. Start the service to run this test.")
+        except requests.exceptions.ConnectionError as e:
+            pytest.fail(f"Gemma service is not accessible at {service_url}: {str(e)}")
