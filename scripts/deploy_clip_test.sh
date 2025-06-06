@@ -9,6 +9,9 @@ echo "Deploying CLIP service to Minikube for testing..."
 
 kubectl config use-context "$MINIKUBE_PROFILE"
 
+echo "Creating ConfigMap from app.py..."
+kubectl create configmap clip-service-code --from-file=app.py=clip-service/app.py -n "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
+
 echo "Applying CLIP RayService manifest..."
 kubectl apply -f k8s-manifests/clip-rayservice.yaml
 
