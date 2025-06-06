@@ -42,7 +42,7 @@ class GemmaService:
     def _initialize_pipeline(self):
         device = 0 if torch.cuda.is_available() else -1
         return pipeline(
-            "image-text-to-text",
+            "text-generation",
             model="google/gemma-3-1b-it",
             device=device,
             torch_dtype=torch.bfloat16
@@ -143,18 +143,19 @@ class GemmaService:
                 }
             )
 
+def signal_handler(sig, frame):
+    serve.shutdown()
+    ray.shutdown()
+    exit(0)
+
 if __name__ == "__main__":
     import signal
     import time
     
     ray.init()
     serve.start(http_options={"host": "0.0.0.0", "port": int(os.environ.get("PORT", 8000))})
-    serve.run(GemmaService.bind())
     
-    def signal_handler(sig, frame):
-        serve.shutdown()
-        ray.shutdown()
-        exit(0)
+    serve.run(GemmaService.bind())
     
     signal.signal(signal.SIGTERM, signal_handler)
     signal.signal(signal.SIGINT, signal_handler)

@@ -28,7 +28,7 @@ fi
 cd "$PROJECT_ROOT"
 
 echo "Running Gemma-specific tests..."
-pytest gemma-service/tests/test_gemma_service.py -v -m gemma
+pytest gemma-service/tests/test_gemma_service.py -v
 
 echo ""
 echo "All Gemma tests completed successfully!"

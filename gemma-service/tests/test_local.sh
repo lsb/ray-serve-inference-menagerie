@@ -33,6 +33,9 @@ pytest gemma-service/tests/test_gemma_service.py -v --tb=short
 echo ""
 echo "Running Gemma validation tests..."
 pytest gemma-service/tests/test_gemma_service.py::TestGemmaService::test_gemma_performance_benchmark -v
+pytest gemma-service/tests/test_gemma_service.py::TestGemmaService::test_cat_vs_dog_recognition -v
+pytest gemma-service/tests/test_gemma_service.py::TestGemmaService::test_inside_vs_outside_classification -v
+pytest gemma-service/tests/test_gemma_service.py::TestGemmaService::test_outdoor_scene_classification -v
 
 echo ""
 echo "All tests completed successfully!"
