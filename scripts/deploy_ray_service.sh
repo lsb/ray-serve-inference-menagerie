@@ -98,10 +98,10 @@ if [[ -z "$SERVICE_NAME" ]]; then
 fi
 
 case "$SERVICE_NAME" in
-    clip|gemma|grounding-dino)
+    clip|gemma|grounding-dino|moondream)
         ;;
     *)
-        echo "Error: Invalid service name '$SERVICE_NAME'. Must be one of: clip, gemma, grounding-dino"
+        echo "Error: Invalid service name '$SERVICE_NAME'. Must be one of: clip, gemma, grounding-dino, moondream"
         exit 1
         ;;
 esac

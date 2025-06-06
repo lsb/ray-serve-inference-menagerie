@@ -54,6 +54,35 @@ curl -X POST -H "Content-Type: application/json" \
     http://localhost:8081/
 ```
 
+### 🌙 MoondreamService (Template)
+Vision-language model using Moondream2 for captioning, visual querying, object detection, and pointing.
+
+**Endpoints:**
+- `POST /caption` - Generate image captions
+- `POST /query` - Answer questions about images  
+- `POST /detect` - Detect specific objects in images
+- `POST /point` - Point to object locations in images
+
+```bash
+# Caption generation
+curl -X POST -H "Content-Type: application/json" \
+    -d '{"image_url": "https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/beignets-task-guide.png",
+         "length": "normal"}' \
+    http://localhost:8002/caption
+
+# Visual querying
+curl -X POST -H "Content-Type: application/json" \
+    -d '{"image_url": "https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/beignets-task-guide.png",
+         "question": "What food is shown in this image?"}' \
+    http://localhost:8002/query
+
+# Object detection
+curl -X POST -H "Content-Type: application/json" \
+    -d '{"image_url": "https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/beignets-task-guide.png",
+         "object": "food"}' \
+    http://localhost:8002/detect
+```
+
 ## Quick Start
 
 ### Prerequisites
@@ -79,6 +108,7 @@ make docker-build
 docker build -t your-registry/clip-service:latest ./clip-service
 docker build -t your-registry/gemma-service:latest ./gemma-service
 docker build -t your-registry/grounding-dino-service:latest ./grounding-dino-service
+docker build -t your-registry/moondream-service:latest ./moondream-service
 ```
 
 ### 3. Deploy to Kubernetes
@@ -97,6 +127,11 @@ docker build -t your-registry/grounding-dino-service:latest ./grounding-dino-ser
 ./scripts/deploy_ray_service.sh gemma \
   --username bob \
   --node-selector gpu=true
+
+# Deploy Moondream service
+./scripts/deploy_ray_service.sh moondream \
+  --username charlie \
+  --node-selector gpu=true
 ```
 
 ### 4. Access Services
@@ -105,6 +140,7 @@ docker build -t your-registry/grounding-dino-service:latest ./grounding-dino-ser
 kubectl port-forward svc/alice-clip-service 8080:80
 kubectl port-forward svc/bob-gemma-service 8081:80
 kubectl port-forward svc/grounding-dino-service 8082:80
+kubectl port-forward svc/charlie-moondream-service 8083:80
 
 # Test CLIP service
 curl -X POST -H "Content-Type: application/json" \
@@ -149,6 +185,7 @@ make test-k8s
 # Run specific service tests
 pytest clip-service/tests/test_clip_service.py -v
 pytest tests/test_grounding_dino_service.py -v
+pytest moondream-service/tests/test_moondream_service.py -v
 
 # Run CLIP tests only
 make test-clip
@@ -186,6 +223,9 @@ ray-serve-inference-menagerie/
 ├── grounding-dino-service/ # Production object detection
 │   ├── app.py
 │   └── Dockerfile
+├── moondream-service/      # Moondream2 vision-language model
+│   ├── app.py
+│   └── Dockerfile
 ├── k8s-manifests/          # Kubernetes deployments
 │   ├── *-deployment.yaml  # Service deployments
 │   ├── *-service.yaml     # Service definitions
@@ -208,6 +248,7 @@ ray-serve-inference-menagerie/
 - `CLIP_SERVICE_URL` - CLIP service endpoint (default: http://localhost:8000)
 - `GEMMA_SERVICE_URL` - Gemma service endpoint (default: http://localhost:8001)  
 - `GROUNDING_DINO_SERVICE_URL` - Grounding DINO endpoint (default: http://localhost:8002)
+- `MOONDREAM_SERVICE_URL` - Moondream endpoint (default: http://localhost:8003)
 
 ### GPU Node Scheduling
 Services automatically schedule on GPU nodes using node selectors:
