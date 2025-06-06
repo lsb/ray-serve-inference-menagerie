@@ -1,0 +1,47 @@
+apiVersion: ray.io/v1alpha1
+kind: RayService
+metadata:
+  name: grounding-dino-sam-service
+spec:
+  rayClusterConfig:
+    rayVersion: "2.6.0"
+    headGroupSpec:
+      template:
+        spec:
+          containers:
+          - name: ray-head
+            image: myregistry/grounding-dino-sam:latest   # Image built from Dockerfile
+            resources:
+              requests:
+                cpu: 1
+                memory: 4Gi
+    workerGroupSpecs:
+    - groupName: gpu-workers
+      replicas: 1
+      minReplicas: 1
+      maxReplicas: 1
+      rayStartParams:
+        num-gpus: "1"    # Advertise 1 GPU to Ray on this node
+      template:
+        spec:
+          nodeSelector:
+            node_type: gpu               # schedule on GPU node (label must exist on GPU nodes)
+          tolerations:
+            - key: "nvidia.com/gpu"      # (example toleration if GPU nodes are tainted)
+              operator: "Exists"
+          containers:
+          - name: ray-worker
+            image: myregistry/grounding-dino-sam:latest   # Same image with models
+            resources:
+              limits:
+                nvidia.com/gpu: 1        # request one GPU
+                cpu: 4
+                memory: 16Gi
+              requests:
+                cpu: 2
+                memory: 16Gi
+  serveDeploymentGraphSpec:
+    importPath: "app:GroundingDinoService"   # Module and class for Serve app
+    serveConfigSpecs:
+      - name: GroundingDinoService           # Serve deployment name
+        routePrefix: "/grounding-dino"       # Base URL path for this service

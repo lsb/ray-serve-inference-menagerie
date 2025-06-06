@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ${USERNAME}-${SERVICE_NAME}
+  labels:
+    app: ${USERNAME}-${SERVICE_NAME}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ${USERNAME}-${SERVICE_NAME}
+  template:
+    metadata:
+      labels:
+        app: ${USERNAME}-${SERVICE_NAME}
+      annotations:
+        ad.datadoghq.com/ray.checks: |-
+          {
+            "ray": {
+              "instances": [
+                { "openmetrics_endpoint": "http://%%host%%:8080" }
+              ]
+            }
+          }
+        ad.datadoghq.com/ray.logs: '[{"source": "ray", "service": "${SERVICE_NAME}"}]'
+    spec:
+      containers:
+      - name: ray
+        image: <YOUR_RAY_SERVE_IMAGE>:latest
+        ports:
+        - containerPort: 8000   # Ray Serve HTTP port (defaults to 8000)
+        - containerPort: 8080   # Prometheus metrics export port
+        env:
+        - name: RAY_START_PARAMS
+          value: "--head --dashboard-host=0.0.0.0 --metrics-export-port=8080"
+        command: ["/bin/bash"]
+        args:
+        - "-c"
+        - |
+          ray start $RAY_START_PARAMS && \
+          python serve_app.py
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ${USERNAME}-${SERVICE_NAME}
+  labels:
+    app: ${USERNAME}-${SERVICE_NAME}
+spec:
+  type: ClusterIP
+  selector:
+    app: ${USERNAME}-${SERVICE_NAME}
+  ports:
+  - port: 80
+    targetPort: 8000
+    protocol: TCP
+    name: http

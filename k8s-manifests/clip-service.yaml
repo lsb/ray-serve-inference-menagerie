@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: clip-service
+  labels:
+    app: clip-service
+spec:
+  selector:
+    app: clip-service   # targets the pods with label app: clip-service
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8000  # container's port
+      protocol: TCP
+  type: ClusterIP
