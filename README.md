@@ -152,6 +152,9 @@ pytest tests/test_grounding_dino_service.py -v
 
 # Run CLIP tests only
 make test-clip
+
+# Run all service tests (comprehensive test suite)
+make test-all-services
 ```
 
 ### Linting
