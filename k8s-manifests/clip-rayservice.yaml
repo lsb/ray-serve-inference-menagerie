@@ -11,14 +11,6 @@ spec:
       - name: clip
         import_path: app:clip_service
         route_prefix: "/"
-        runtime_env:
-          working_dir: "."
-        deployments:
-          - name: CLIPService
-            num_replicas: 1
-            ray_actor_options:
-              num_cpus: 2
-              num_gpus: 0  # Will be overridden by GPU detection in code
   rayClusterConfig:
     rayVersion: '2.8.0'
     enableInTreeAutoscaling: true
@@ -71,6 +63,14 @@ spec:
             containers:
               - name: ray-worker
                 image: rayproject/ray:2.8.0-py310
+                env:
+                  - name: PYTHONPATH
+                    value: "/app"
+                command: ["/bin/bash", "-c"]
+                args:
+                  - |
+                    pip install torch==2.7.0 transformers==4.52.4 Pillow requests fastapi uvicorn python-multipart &&
+                    ray start --address=$RAY_HEAD_SERVICE_HOST:6379 --block
                 lifecycle:
                   preStop:
                     exec:

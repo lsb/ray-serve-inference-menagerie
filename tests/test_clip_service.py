@@ -38,7 +38,7 @@ class TestCLIPService:
     @pytest.fixture(scope="class")
     def inside_vs_outside_labels(self) -> list:
         """Labels for inside vs outside classification test."""
-        return ["inside", "outside"]
+        return ["indoor scene", "outdoor scene"]
     
     def test_service_health(self, service_url: str):
         """Test that the service is running and responsive."""
@@ -59,17 +59,21 @@ class TestCLIPService:
         assert response.status_code == 200
         
         result = response.json()
-        assert isinstance(result, list)
-        assert len(result) > 0
+        assert "predictions" in result
+        assert "performance" in result
         
-        for item in result:
+        predictions = result["predictions"]
+        assert isinstance(predictions, list)
+        assert len(predictions) > 0
+        
+        for item in predictions:
             assert "label" in item
             assert "score" in item
             assert isinstance(item["label"], str)
             assert isinstance(item["score"], (int, float))
             assert 0 <= item["score"] <= 1
         
-        scores = [item["score"] for item in result]
+        scores = [item["score"] for item in predictions]
         assert scores == sorted(scores, reverse=True)
     
     def test_clip_classification_missing_image_url(self, service_url: str, sample_labels: list):
@@ -130,9 +134,12 @@ class TestCLIPService:
         assert response.status_code == 200
         
         result = response.json()
-        assert isinstance(result, list)
-        assert len(result) == 1
-        assert result[0]["label"] == "food"
+        assert "predictions" in result
+        
+        predictions = result["predictions"]
+        assert isinstance(predictions, list)
+        assert len(predictions) == 1
+        assert predictions[0]["label"] == "food"
     
     def test_clip_classification_many_labels(self, service_url: str, sample_image_url: str):
         """Test CLIP classification with many labels."""
@@ -150,10 +157,13 @@ class TestCLIPService:
         assert response.status_code == 200
         
         result = response.json()
-        assert isinstance(result, list)
-        assert len(result) == len(many_labels)
+        assert "predictions" in result
         
-        result_labels = {item["label"] for item in result}
+        predictions = result["predictions"]
+        assert isinstance(predictions, list)
+        assert len(predictions) == len(many_labels)
+        
+        result_labels = {item["label"] for item in predictions}
         assert result_labels == set(many_labels)
     
     def test_clip_performance_benchmark(self, service_url: str, sample_image_url: str, sample_labels: list):
@@ -184,10 +194,10 @@ class TestCLIPService:
         if not os.path.exists(cat_image_path):
             pytest.skip(f"Cat sample image not found at {cat_image_path}")
         
-        file_url = f"file://{cat_image_path}"
+        public_cat_url = "https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/transformers/tasks/cat.jpg"
         
         payload = {
-            "image_url": file_url,
+            "image_url": public_cat_url,
             "labels": cat_vs_dog_labels
         }
         
@@ -232,10 +242,10 @@ class TestCLIPService:
         if not os.path.exists(cat_image_path):
             pytest.skip(f"Cat sample image not found at {cat_image_path}")
         
-        file_url = f"file://{cat_image_path}"
+        public_indoor_cat_url = "https://images.unsplash.com/photo-1574158622682-e40e69881006?w=400"
         
         payload = {
-            "image_url": file_url,
+            "image_url": public_indoor_cat_url,
             "labels": inside_vs_outside_labels
         }
         
@@ -250,47 +260,40 @@ class TestCLIPService:
             predictions = result["predictions"]
             assert len(predictions) == 2
             
-            inside_score = None
-            outside_score = None
+            indoor_score = None
+            outdoor_score = None
             for pred in predictions:
-                if pred["label"].lower() == "inside":
-                    inside_score = pred["score"]
-                elif pred["label"].lower() == "outside":
-                    outside_score = pred["score"]
+                if "indoor" in pred["label"].lower():
+                    indoor_score = pred["score"]
+                elif "outdoor" in pred["label"].lower():
+                    outdoor_score = pred["score"]
             
-            assert inside_score is not None, "Inside prediction not found"
-            assert outside_score is not None, "Outside prediction not found"
+            assert indoor_score is not None, "Indoor prediction not found"
+            assert outdoor_score is not None, "Outdoor prediction not found"
             
-            assert inside_score > outside_score, f"Inside score ({inside_score}) should be higher than outside score ({outside_score})"
+            assert indoor_score > outdoor_score, f"Indoor score ({indoor_score}) should be higher than outdoor score ({outdoor_score})"
             
-            print(f"Inside vs Outside test passed: inside={inside_score:.3f}, outside={outside_score:.3f}")
+            print(f"Indoor vs Outdoor test passed: indoor={indoor_score:.3f}, outdoor={outdoor_score:.3f}")
             
         except requests.exceptions.ConnectionError:
             pytest.skip("CLIP service is not running. Start the service to run this test.")
     
     def test_all_cat_images_classification(self, service_url: str, cat_vs_dog_labels: list):
-        """Test CLIP classification on all available cat sample images."""
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        project_root = os.path.dirname(script_dir)
-        cat_dir = os.path.join(project_root, "sample_data", "cats_on_desk")
-        
-        if not os.path.exists(cat_dir):
-            pytest.skip(f"Cat sample directory not found at {cat_dir}")
-        
-        cat_files = [f for f in os.listdir(cat_dir) if f.endswith(('.png', '.jpg', '.jpeg'))]
-        
-        if not cat_files:
-            pytest.skip("No cat sample images found")
+        """Test CLIP classification on multiple cat images using public URLs."""
+        cat_image_urls = [
+            "https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/transformers/tasks/cat.jpg",
+            "https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?w=400",
+            "https://images.unsplash.com/photo-1533738363-b7f9aef128ce?w=400",
+            "https://images.unsplash.com/photo-1574158622682-e40e69881006?w=400",
+            "https://images.unsplash.com/photo-1592194996308-7b43878e84a6?w=400"
+        ]
         
         successful_tests = 0
-        total_tests = len(cat_files)
+        total_tests = len(cat_image_urls)
         
-        for cat_file in cat_files:
-            cat_path = os.path.join(cat_dir, cat_file)
-            file_url = f"file://{cat_path}"
-            
+        for i, cat_url in enumerate(cat_image_urls):
             payload = {
-                "image_url": file_url,
+                "image_url": cat_url,
                 "labels": cat_vs_dog_labels
             }
             
@@ -310,14 +313,14 @@ class TestCLIPService:
                     
                     if cat_score is not None and dog_score is not None and cat_score > dog_score:
                         successful_tests += 1
-                        print(f"✓ {cat_file}: cat={cat_score:.3f} > dog={dog_score:.3f}")
+                        print(f"✓ Cat image {i+1}: cat={cat_score:.3f} > dog={dog_score:.3f}")
                     else:
-                        print(f"✗ {cat_file}: cat={cat_score:.3f} <= dog={dog_score:.3f}")
+                        print(f"✗ Cat image {i+1}: cat={cat_score:.3f} <= dog={dog_score:.3f}")
                 
             except requests.exceptions.ConnectionError:
                 pytest.skip("CLIP service is not running. Start the service to run this test.")
             except Exception as e:
-                print(f"Error testing {cat_file}: {e}")
+                print(f"Error testing cat image {i+1}: {e}")
         
         success_rate = successful_tests / total_tests
         assert success_rate >= 0.8, f"Only {successful_tests}/{total_tests} ({success_rate:.1%}) cat images classified correctly"

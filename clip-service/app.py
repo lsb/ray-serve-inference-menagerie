@@ -13,7 +13,6 @@ from fastapi.responses import JSONResponse
 app = FastAPI(title="CLIP Service", description="Zero-shot image classification using CLIP")
 
 @serve.deployment(
-    route_prefix="/",
     ray_actor_options={"num_gpus": 1 if torch.cuda.is_available() else 0}
 )
 @serve.ingress(app)
@@ -77,8 +76,21 @@ class CLIPService:
                     content={"error": "Labels must be a non-empty list."}
                 )
             
+            processed_image_url = image_url
+            if image_url.startswith("file://"):
+                return JSONResponse(
+                    status_code=400,
+                    content={
+                        "error": "Local file URLs (file://) are not supported in containerized deployment. Please use HTTP/HTTPS URLs or base64 encoded images.",
+                        "performance": {
+                            "error_time_ms": round((time.time() - start_time) * 1000, 2),
+                            "device_info": self.device_info
+                        }
+                    }
+                )
+            
             inference_start = time.time()
-            result = self.pipeline(image_url, candidate_labels=candidate_labels)
+            result = self.pipeline(processed_image_url, candidate_labels=candidate_labels)
             inference_time = time.time() - inference_start
             
             total_time = time.time() - start_time
@@ -108,4 +120,25 @@ class CLIPService:
             )
 
 if __name__ == "__main__":
-    serve.run(CLIPService, host="0.0.0.0", port=int(os.environ.get("PORT", 8000)))
+    ray.init()
+    serve.start(http_options={"host": "0.0.0.0", "port": int(os.environ.get("PORT", 8000))})
+    serve.run(CLIPService.bind())
+    
+    import signal
+    import time
+    
+    def signal_handler(sig, frame):
+        serve.shutdown()
+        ray.shutdown()
+        exit(0)
+    
+    signal.signal(signal.SIGTERM, signal_handler)
+    signal.signal(signal.SIGINT, signal_handler)
+    
+    print(f"CLIP service is running on port {os.environ.get('PORT', 8000)}")
+    
+    try:
+        while True:
+            time.sleep(60)
+    except KeyboardInterrupt:
+        signal_handler(None, None)
