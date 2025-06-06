@@ -55,6 +55,10 @@ test-gemma:
 	@echo "Running Gemma service tests"
 	./gemma-service/tests/run_tests.sh
 
+test-grounding-dino:
+	@echo "Running Grounding DINO service tests"
+	./grounding-dino-service/tests/run_tests.sh
+
 test-all-services:
 	@echo "Running all service tests (comprehensive test suite)"
 	@echo "Testing CLIP service..."
@@ -63,9 +67,12 @@ test-all-services:
 	@echo "Testing Gemma service..."
 	./gemma-service/tests/run_tests.sh
 	@echo ""
+	@echo "Testing Grounding DINO service..."
+	./grounding-dino-service/tests/run_tests.sh
+	@echo ""
 	@echo "Testing other services..."
-	pytest tests/test_grounding_dino_service.py -v
 	pytest tests/test_gemma_service.py -v
+	pytest moondream-service/tests/test_moondream_service.py -v
 	@echo ""
 	@echo "All service tests completed!"
 
@@ -87,6 +94,7 @@ docker-build:
 	@echo "  - clip-service"
 	@echo "  - gemma-service" 
 	@echo "  - grounding-dino-service"
+	@echo "  - moondream-service"
 
 docker-push:
 	@echo "TODO: Push Docker images to registry"
