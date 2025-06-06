@@ -47,6 +47,10 @@ test-k8s:
 	@echo "TODO: Run Kubernetes manifest tests"
 	pytest tests/test_kubernetes_manifests.py -v
 
+test-clip:
+	@echo "Running CLIP service tests"
+	./clip-service/tests/run_tests.sh
+
 run:
 	@echo "TODO: Run scripts/run_local.sh"
 	./scripts/run_local.sh

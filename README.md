@@ -147,8 +147,11 @@ make test-docker
 make test-k8s
 
 # Run specific service tests
-pytest tests/test_clip_service.py -v
+pytest clip-service/tests/test_clip_service.py -v
 pytest tests/test_grounding_dino_service.py -v
+
+# Run CLIP tests only
+make test-clip
 ```
 
 ### Linting
