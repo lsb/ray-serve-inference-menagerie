@@ -3,7 +3,7 @@ import requests
 import json
 import time
 import os
-from typing import Dict, Any
+from typing import Dict, Any, Callable
 
 class TestCLIPService:
     """Test suite for CLIP zero-shot image classification service."""
@@ -47,6 +47,16 @@ class TestCLIPService:
         """Labels for inside vs outside classification test."""
         return ["indoor scene", "outdoor scene"]
     
+    @pytest.fixture(scope="class")
+    def image_to_base64(self) -> Callable[[str], str]:
+        """Helper function to convert image files to base64."""
+        def convert(image_path: str) -> str:
+            import base64
+            with open(image_path, 'rb') as f:
+                image_bytes = f.read()
+            return base64.b64encode(image_bytes).decode('utf-8')
+        return convert
+    
     def test_service_health(self, service_url: str):
         """Test that the service is running and responsive."""
         try:
@@ -55,10 +65,25 @@ class TestCLIPService:
         except requests.exceptions.ConnectionError:
             pytest.skip("CLIP service is not running. Start the service to run this test.")
     
-    def test_clip_classification_valid_request(self, service_url: str, sample_image_url: str, sample_labels: list):
-        """Test CLIP classification with valid image URL and labels."""
+    def test_clip_classification_valid_request(self, service_url: str, sample_image_url: str, sample_labels: list, image_to_base64: Callable[[str], str]):
+        """Test CLIP classification with valid base64-encoded image and labels."""
+        import requests as req_lib
+        try:
+            img_response = req_lib.get(sample_image_url)
+            img_response.raise_for_status()
+            import base64
+            sample_base64 = base64.b64encode(img_response.content).decode('utf-8')
+        except Exception:
+            import base64
+            from PIL import Image
+            import io
+            test_image = Image.new('RGB', (100, 100), color='red')
+            img_buffer = io.BytesIO()
+            test_image.save(img_buffer, format='JPEG')
+            sample_base64 = base64.b64encode(img_buffer.getvalue()).decode('utf-8')
+        
         payload = {
-            "image_url": sample_image_url,
+            "image": sample_base64,
             "labels": sample_labels
         }
         
@@ -84,7 +109,7 @@ class TestCLIPService:
         assert scores == sorted(scores, reverse=True)
     
     def test_clip_classification_missing_image_url(self, service_url: str, sample_labels: list):
-        """Test CLIP classification with missing image URL."""
+        """Test CLIP classification with missing image data."""
         payload = {
             "labels": sample_labels
         }
@@ -93,12 +118,27 @@ class TestCLIPService:
         result = response.json()
         
         assert "error" in result
-        assert "image_url" in result["error"]
+        assert "image" in result["error"]
     
     def test_clip_classification_missing_labels(self, service_url: str, sample_image_url: str):
         """Test CLIP classification with missing labels."""
+        import requests as req_lib
+        try:
+            img_response = req_lib.get(sample_image_url)
+            img_response.raise_for_status()
+            import base64
+            sample_base64 = base64.b64encode(img_response.content).decode('utf-8')
+        except Exception:
+            import base64
+            from PIL import Image
+            import io
+            test_image = Image.new('RGB', (100, 100), color='red')
+            img_buffer = io.BytesIO()
+            test_image.save(img_buffer, format='JPEG')
+            sample_base64 = base64.b64encode(img_buffer.getvalue()).decode('utf-8')
+        
         payload = {
-            "image_url": sample_image_url
+            "image": sample_base64
         }
         
         response = requests.post(service_url, json=payload, timeout=10)
@@ -109,8 +149,23 @@ class TestCLIPService:
     
     def test_clip_classification_empty_labels(self, service_url: str, sample_image_url: str):
         """Test CLIP classification with empty labels list."""
+        import requests as req_lib
+        try:
+            img_response = req_lib.get(sample_image_url)
+            img_response.raise_for_status()
+            import base64
+            sample_base64 = base64.b64encode(img_response.content).decode('utf-8')
+        except Exception:
+            import base64
+            from PIL import Image
+            import io
+            test_image = Image.new('RGB', (100, 100), color='red')
+            img_buffer = io.BytesIO()
+            test_image.save(img_buffer, format='JPEG')
+            sample_base64 = base64.b64encode(img_buffer.getvalue()).decode('utf-8')
+        
         payload = {
-            "image_url": sample_image_url,
+            "image": sample_base64,
             "labels": []
         }
         
@@ -119,10 +174,10 @@ class TestCLIPService:
         
         assert "error" in result
     
-    def test_clip_classification_invalid_image_url(self, service_url: str, sample_labels: list):
-        """Test CLIP classification with invalid image URL."""
+    def test_clip_classification_invalid_image_data(self, service_url: str, sample_labels: list):
+        """Test CLIP classification with invalid base64 image data."""
         payload = {
-            "image_url": "https://invalid-url-that-does-not-exist.com/image.jpg",
+            "image": "invalid_base64_data_that_cannot_be_decoded",
             "labels": sample_labels
         }
         
@@ -132,8 +187,23 @@ class TestCLIPService:
     
     def test_clip_classification_single_label(self, service_url: str, sample_image_url: str):
         """Test CLIP classification with a single label."""
+        import requests as req_lib
+        try:
+            img_response = req_lib.get(sample_image_url)
+            img_response.raise_for_status()
+            import base64
+            sample_base64 = base64.b64encode(img_response.content).decode('utf-8')
+        except Exception:
+            import base64
+            from PIL import Image
+            import io
+            test_image = Image.new('RGB', (100, 100), color='red')
+            img_buffer = io.BytesIO()
+            test_image.save(img_buffer, format='JPEG')
+            sample_base64 = base64.b64encode(img_buffer.getvalue()).decode('utf-8')
+        
         payload = {
-            "image_url": sample_image_url,
+            "image": sample_base64,
             "labels": ["food"]
         }
         
@@ -155,8 +225,23 @@ class TestCLIPService:
             "furniture", "clothing", "sports", "music", "art", "book", "tool", "toy"
         ]
         
+        import requests as req_lib
+        try:
+            img_response = req_lib.get(sample_image_url)
+            img_response.raise_for_status()
+            import base64
+            sample_base64 = base64.b64encode(img_response.content).decode('utf-8')
+        except Exception:
+            import base64
+            from PIL import Image
+            import io
+            test_image = Image.new('RGB', (100, 100), color='red')
+            img_buffer = io.BytesIO()
+            test_image.save(img_buffer, format='JPEG')
+            sample_base64 = base64.b64encode(img_buffer.getvalue()).decode('utf-8')
+        
         payload = {
-            "image_url": sample_image_url,
+            "image": sample_base64,
             "labels": many_labels
         }
         
@@ -175,8 +260,23 @@ class TestCLIPService:
     
     def test_clip_performance_benchmark(self, service_url: str, sample_image_url: str, sample_labels: list):
         """Benchmark the performance of CLIP classification."""
+        import requests as req_lib
+        try:
+            img_response = req_lib.get(sample_image_url)
+            img_response.raise_for_status()
+            import base64
+            sample_base64 = base64.b64encode(img_response.content).decode('utf-8')
+        except Exception:
+            import base64
+            from PIL import Image
+            import io
+            test_image = Image.new('RGB', (100, 100), color='red')
+            img_buffer = io.BytesIO()
+            test_image.save(img_buffer, format='JPEG')
+            sample_base64 = base64.b64encode(img_buffer.getvalue()).decode('utf-8')
+        
         payload = {
-            "image_url": sample_image_url,
+            "image": sample_base64,
             "labels": sample_labels
         }
         
@@ -196,22 +296,21 @@ class TestCLIPService:
         
         assert avg_response_time < 10.0
     
-    def test_cat_vs_dog_classification(self, service_url: str, cat_image_path: str, dog_image_path: str, cat_vs_dog_labels: list):
+    def test_cat_vs_dog_classification(self, service_url: str, cat_image_path: str, dog_image_path: str, cat_vs_dog_labels: list, image_to_base64: Callable[[str], str]):
         """Test that CLIP correctly identifies cat images as cats rather than dogs using local sample images."""
         if not os.path.exists(cat_image_path):
             pytest.skip(f"Cat sample image not found at {cat_image_path}")
         if not os.path.exists(dog_image_path):
             pytest.skip(f"Dog sample image not found at {dog_image_path}")
         
+        cat_base64 = image_to_base64(cat_image_path)
         cat_payload = {
-            "image_url": f"file://{cat_image_path}",
+            "image": cat_base64,
             "labels": cat_vs_dog_labels
         }
         
         try:
             cat_response = requests.post(service_url, json=cat_payload, timeout=30)
-            if cat_response.status_code == 400:
-                pytest.skip("Local file URLs not supported in containerized deployment - test requires direct file access")
             assert cat_response.status_code == 200
             cat_result = cat_response.json()
             assert "predictions" in cat_result
@@ -231,14 +330,13 @@ class TestCLIPService:
             assert dog_score is not None, "Dog prediction not found"
             assert cat_score > dog_score, f"Cat image: cat score ({cat_score}) should be higher than dog score ({dog_score})"
             
+            dog_base64 = image_to_base64(dog_image_path)
             dog_payload = {
-                "image_url": f"file://{dog_image_path}",
+                "image": dog_base64,
                 "labels": cat_vs_dog_labels
             }
             
             dog_response = requests.post(service_url, json=dog_payload, timeout=30)
-            if dog_response.status_code == 400:
-                pytest.skip("Local file URLs not supported in containerized deployment - test requires direct file access")
             assert dog_response.status_code == 200
             dog_result = dog_response.json()
             assert "predictions" in dog_result
@@ -277,8 +375,23 @@ class TestCLIPService:
         
         public_indoor_cat_url = "https://images.unsplash.com/photo-1574158622682-e40e69881006?w=400"
         
+        import requests as req_lib
+        try:
+            img_response = req_lib.get(public_indoor_cat_url)
+            img_response.raise_for_status()
+            import base64
+            sample_base64 = base64.b64encode(img_response.content).decode('utf-8')
+        except Exception:
+            import base64
+            from PIL import Image
+            import io
+            test_image = Image.new('RGB', (100, 100), color='red')
+            img_buffer = io.BytesIO()
+            test_image.save(img_buffer, format='JPEG')
+            sample_base64 = base64.b64encode(img_buffer.getvalue()).decode('utf-8')
+        
         payload = {
-            "image_url": public_indoor_cat_url,
+            "image": sample_base64,
             "labels": inside_vs_outside_labels
         }
         
@@ -325,8 +438,23 @@ class TestCLIPService:
         total_tests = len(cat_image_urls)
         
         for i, cat_url in enumerate(cat_image_urls):
+            import requests as req_lib
+            try:
+                img_response = req_lib.get(cat_url)
+                img_response.raise_for_status()
+                import base64
+                cat_base64 = base64.b64encode(img_response.content).decode('utf-8')
+            except Exception:
+                import base64
+                from PIL import Image
+                import io
+                test_image = Image.new('RGB', (100, 100), color='red')
+                img_buffer = io.BytesIO()
+                test_image.save(img_buffer, format='JPEG')
+                cat_base64 = base64.b64encode(img_buffer.getvalue()).decode('utf-8')
+            
             payload = {
-                "image_url": cat_url,
+                "image": cat_base64,
                 "labels": cat_vs_dog_labels
             }
             

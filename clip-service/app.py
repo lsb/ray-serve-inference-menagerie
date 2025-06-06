@@ -2,6 +2,8 @@ import os
 import time
 import signal
 import asyncio
+import base64
+import io
 from typing import Dict, Any, List
 import ray
 from ray import serve
@@ -9,6 +11,7 @@ import torch
 from transformers import pipeline
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
+from PIL import Image
 
 app = FastAPI(title="CLIP Service", description="Zero-shot image classification using CLIP")
 
@@ -61,13 +64,13 @@ class CLIPService:
         start_time = time.time()
         
         try:
-            image_url = request_data.get("image_url")
+            image_data = request_data.get("image")
             candidate_labels = request_data.get("labels")
             
-            if not image_url or not candidate_labels:
+            if not image_data or not candidate_labels:
                 return JSONResponse(
                     status_code=400,
-                    content={"error": "Provide 'image_url' and 'labels' in request JSON."}
+                    content={"error": "Provide 'image' (base64-encoded) and 'labels' in request JSON."}
                 )
             
             if not isinstance(candidate_labels, list) or len(candidate_labels) == 0:
@@ -76,12 +79,18 @@ class CLIPService:
                     content={"error": "Labels must be a non-empty list."}
                 )
             
-            processed_image_url = image_url
-            if image_url.startswith("file://"):
+            try:
+                image_bytes = base64.b64decode(image_data)
+                image = Image.open(io.BytesIO(image_bytes))
+                
+                if image.mode != 'RGB':
+                    image = image.convert('RGB')
+                    
+            except Exception as e:
                 return JSONResponse(
                     status_code=400,
                     content={
-                        "error": "Local file URLs (file://) are not supported in containerized deployment. Please use HTTP/HTTPS URLs or base64 encoded images.",
+                        "error": f"Invalid base64 image data: {str(e)}",
                         "performance": {
                             "error_time_ms": round((time.time() - start_time) * 1000, 2),
                             "device_info": self.device_info
@@ -90,7 +99,7 @@ class CLIPService:
                 )
             
             inference_start = time.time()
-            result = self.pipeline(processed_image_url, candidate_labels=candidate_labels)
+            result = self.pipeline(image, candidate_labels=candidate_labels)
             inference_time = time.time() - inference_start
             
             total_time = time.time() - start_time
@@ -120,12 +129,12 @@ class CLIPService:
             )
 
 if __name__ == "__main__":
+    import signal
+    import time
+    
     ray.init()
     serve.start(http_options={"host": "0.0.0.0", "port": int(os.environ.get("PORT", 8000))})
     serve.run(CLIPService.bind())
-    
-    import signal
-    import time
     
     def signal_handler(sig, frame):
         serve.shutdown()
