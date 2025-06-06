@@ -66,25 +66,11 @@ setup_python_env() {
     pip install --upgrade pip
     
     echo "Installing Python dependencies..."
-    pip install \
-        "ray[serve]>=2.8.0" \
-        "torch>=2.0.0" \
-        "transformers>=4.30.0" \
-        "Pillow>=9.0.0" \
-        "requests>=2.28.0" \
-        "fastapi>=0.100.0" \
-        "uvicorn>=0.20.0" \
-        "python-multipart>=0.0.6"
+    pip install -r requirements.txt
     
     if [[ "${1:-}" == "--dev" ]]; then
         echo "Installing development dependencies..."
-        pip install \
-            "pytest>=7.0.0" \
-            "pytest-asyncio>=0.21.0" \
-            "black>=23.0.0" \
-            "flake8>=6.0.0" \
-            "mypy>=1.0.0" \
-            "pre-commit>=3.0.0"
+        pip install -r requirements-dev.txt
     fi
     
     echo "Python environment setup completed"

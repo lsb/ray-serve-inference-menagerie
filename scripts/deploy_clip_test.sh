@@ -4,6 +4,7 @@ set -e
 
 NAMESPACE="ray-serve-test"
 MINIKUBE_PROFILE="ray-serve-menagerie"
+TIMEOUT_SECONDS="${TIMEOUT_SECONDS:-600}"  # Default to 10 minutes, can be overridden
 
 echo "Deploying CLIP service to Minikube for testing..."
 
@@ -15,11 +16,11 @@ kubectl create configmap clip-service-code --from-file=app.py=clip-service/app.p
 echo "Applying CLIP RayService manifest..."
 kubectl apply -f k8s-manifests/clip-rayservice.yaml
 
-echo "Waiting for CLIP service to be ready..."
-kubectl wait --for=condition=ready rayservice/clip-service -n "$NAMESPACE" --timeout=300s
+echo "Waiting for CLIP service to be ready (timeout: ${TIMEOUT_SECONDS}s)..."
+kubectl wait --for=condition=ready rayservice/clip-service -n "$NAMESPACE" --timeout="${TIMEOUT_SECONDS}s"
 
-echo "Waiting for Ray cluster pods to be running..."
-kubectl wait --for=condition=ready pod -l rayCluster=clip-service -n "$NAMESPACE" --timeout=300s
+echo "Waiting for Ray cluster pods to be running (timeout: ${TIMEOUT_SECONDS}s)..."
+kubectl wait --for=condition=ready pod -l rayCluster=clip-service -n "$NAMESPACE" --timeout="${TIMEOUT_SECONDS}s"
 
 echo "CLIP service deployment status:"
 kubectl get rayservice clip-service -n "$NAMESPACE"
