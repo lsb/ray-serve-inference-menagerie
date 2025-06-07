@@ -2,14 +2,14 @@ import os
 import time
 import signal
 import asyncio
-import base64
+
 import io
 from typing import Dict, Any
 import ray
 from ray import serve
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
-from fastapi import FastAPI
+from fastapi import FastAPI, File, UploadFile, Form
 from fastapi.responses import JSONResponse
 from PIL import Image
 
@@ -48,26 +48,14 @@ class MoondreamService:
             device_map=device_map
         )
     
-    def _process_image(self, request_data: Dict[str, Any]) -> Image.Image:
-        image_data = request_data.get("image")
-        image_url = request_data.get("image_url")
+    async def _process_image(self, image: UploadFile) -> Image.Image:
+        image_data = await image.read()
+        pil_image = Image.open(io.BytesIO(image_data))
         
-        if not image_data and not image_url:
-            raise ValueError("Provide either 'image' (base64-encoded) or 'image_url' in request JSON.")
+        if pil_image.mode != 'RGB':
+            pil_image = pil_image.convert('RGB')
         
-        if image_data:
-            image_bytes = base64.b64decode(image_data)
-            image = Image.open(io.BytesIO(image_bytes))
-        else:
-            import requests
-            response = requests.get(image_url)
-            response.raise_for_status()
-            image = Image.open(io.BytesIO(response.content))
-        
-        if image.mode != 'RGB':
-            image = image.convert('RGB')
-        
-        return image
+        return pil_image
     
     @app.get("/health")
     async def health_check(self):
@@ -78,15 +66,16 @@ class MoondreamService:
         }
     
     @app.post("/caption")
-    async def caption_image(self, request_data: Dict[str, Any]) -> JSONResponse:
+    async def caption_image(self, 
+                          image: UploadFile = File(...), 
+                          length: str = Form("normal")) -> JSONResponse:
         start_time = time.time()
         
         try:
-            image = self._process_image(request_data)
-            length = request_data.get("length", "normal")
+            pil_image = await self._process_image(image)
             
             inference_start = time.time()
-            result = self.model.caption(image, length=length)
+            result = self.model.caption(pil_image, length=length)
             inference_time = time.time() - inference_start
             
             caption = result["caption"]
@@ -118,21 +107,28 @@ class MoondreamService:
             )
     
     @app.post("/query")
-    async def query_image(self, request_data: Dict[str, Any]) -> JSONResponse:
+    async def query_image(self, 
+                        image: UploadFile = File(...), 
+                        question: str = Form(...)) -> JSONResponse:
         start_time = time.time()
         
         try:
-            image = self._process_image(request_data)
-            question = request_data.get("question") or request_data.get("prompt", "")
+            pil_image = await self._process_image(image)
             
             if not question:
                 return JSONResponse(
                     status_code=400,
-                    content={"error": "Provide 'question' or 'prompt' in request JSON."}
+                    content={
+                        "error": "Provide 'question' in form data.",
+                        "performance": {
+                            "error_time_ms": round((time.time() - start_time) * 1000, 2),
+                            "device_info": self.device_info
+                        }
+                    }
                 )
             
             inference_start = time.time()
-            result = self.model.query(image, question)
+            result = self.model.query(pil_image, question)
             inference_time = time.time() - inference_start
             
             answer = result["answer"]
@@ -164,21 +160,29 @@ class MoondreamService:
             )
     
     @app.post("/detect")
-    async def detect_objects(self, request_data: Dict[str, Any]) -> JSONResponse:
+    async def detect_objects(self, 
+                           image: UploadFile = File(...), 
+                           object: str = Form(...)) -> JSONResponse:
         start_time = time.time()
         
         try:
-            image = self._process_image(request_data)
-            object_name = request_data.get("object", "")
+            pil_image = await self._process_image(image)
+            object_name = object
             
             if not object_name:
                 return JSONResponse(
                     status_code=400,
-                    content={"error": "Provide 'object' name in request JSON."}
+                    content={
+                        "error": "Provide 'object' name in form data.",
+                        "performance": {
+                            "error_time_ms": round((time.time() - start_time) * 1000, 2),
+                            "device_info": self.device_info
+                        }
+                    }
                 )
             
             inference_start = time.time()
-            result = self.model.detect(image, object_name)
+            result = self.model.detect(pil_image, object_name)
             inference_time = time.time() - inference_start
             
             objects = result["objects"]
@@ -211,21 +215,29 @@ class MoondreamService:
             )
     
     @app.post("/point")
-    async def point_objects(self, request_data: Dict[str, Any]) -> JSONResponse:
+    async def point_objects(self, 
+                          image: UploadFile = File(...), 
+                          object: str = Form(...)) -> JSONResponse:
         start_time = time.time()
         
         try:
-            image = self._process_image(request_data)
-            object_name = request_data.get("object", "")
+            pil_image = await self._process_image(image)
+            object_name = object
             
             if not object_name:
                 return JSONResponse(
                     status_code=400,
-                    content={"error": "Provide 'object' name in request JSON."}
+                    content={
+                        "error": "Provide 'object' name in form data.",
+                        "performance": {
+                            "error_time_ms": round((time.time() - start_time) * 1000, 2),
+                            "device_info": self.device_info
+                        }
+                    }
                 )
             
             inference_start = time.time()
-            result = self.model.point(image, object_name)
+            result = self.model.point(pil_image, object_name)
             inference_time = time.time() - inference_start
             
             points = result["points"]

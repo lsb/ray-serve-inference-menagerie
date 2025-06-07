@@ -2,7 +2,6 @@ import pytest
 import requests
 import json
 import time
-import base64
 import io
 import os
 from typing import Dict, Any, Callable
@@ -22,13 +21,12 @@ class TestMoondreamService:
         return "https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/beignets-task-guide.png"
     
     @pytest.fixture(scope="class")
-    def sample_image_base64(self) -> str:
-        """Sample base64-encoded image for testing."""
+    def sample_image_bytes(self) -> bytes:
+        """Sample image bytes for testing."""
         img = Image.new('RGB', (100, 100), color='red')
         buffer = io.BytesIO()
         img.save(buffer, format='PNG')
-        img_bytes = buffer.getvalue()
-        return base64.b64encode(img_bytes).decode('utf-8')
+        return buffer.getvalue()
     
     @pytest.fixture(scope="class")
     def cat_image_path(self) -> str:
@@ -45,22 +43,21 @@ class TestMoondreamService:
         return os.path.join(project_root, "sample_data", "dogs_running", "dog_running_05.png")
     
     @pytest.fixture(scope="class")
-    def cat_vs_dog_prompts(self) -> list:
-        """Prompts for cat vs dog classification test."""
+    def cat_vs_dog_questions(self) -> list:
+        """Questions for cat vs dog classification test."""
         return ["Is this a cat or a dog?", "What animal is this?"]
     
     @pytest.fixture(scope="class")
-    def inside_vs_outside_prompts(self) -> list:
-        """Prompts for inside vs outside classification test."""
+    def inside_vs_outside_questions(self) -> list:
+        """Questions for inside vs outside classification test."""
         return ["Is this an indoor or outdoor scene?", "Where is this photo taken - inside or outside?"]
     
     @pytest.fixture(scope="class")
-    def image_to_base64(self) -> Callable[[str], str]:
-        """Helper function to convert image files to base64."""
-        def convert(image_path: str) -> str:
+    def image_to_bytes(self) -> Callable[[str], bytes]:
+        """Helper function to convert image files to bytes."""
+        def convert(image_path: str) -> bytes:
             with open(image_path, 'rb') as f:
-                image_bytes = f.read()
-            return base64.b64encode(image_bytes).decode('utf-8')
+                return f.read()
         return convert
     
     def test_service_health(self, service_url: str):
@@ -77,14 +74,19 @@ class TestMoondreamService:
         except requests.exceptions.ConnectionError as e:
             pytest.fail(f"Moondream service is not accessible at {service_url}: {str(e)}")
     
-    def test_moondream_caption(self, service_url: str, sample_image_url: str):
+    def test_moondream_caption_image_url(self, service_url: str, sample_image_url: str):
         """Test Moondream captioning functionality."""
-        payload = {
-            "image_url": sample_image_url,
-            "length": "normal"
+        img_response = requests.get(sample_image_url)
+        img_response.raise_for_status()
+        
+        files = {
+            'image': ('test_image.png', img_response.content, 'image/png')
+        }
+        data = {
+            'length': "normal"
         }
         
-        response = requests.post(f"{service_url}/caption", json=payload, timeout=60)
+        response = requests.post(f"{service_url}/caption", files=files, data=data, timeout=60)
         assert response.status_code == 200
         
         result = response.json()
@@ -98,14 +100,19 @@ class TestMoondreamService:
         assert "inference_time_ms" in performance
         assert "device_info" in performance
     
-    def test_moondream_query(self, service_url: str, sample_image_url: str):
+    def test_moondream_query_image_url(self, service_url: str, sample_image_url: str):
         """Test Moondream visual querying functionality."""
-        payload = {
-            "image_url": sample_image_url,
-            "question": "What do you see in this image?"
+        img_response = requests.get(sample_image_url)
+        img_response.raise_for_status()
+        
+        files = {
+            'image': ('test_image.png', img_response.content, 'image/png')
+        }
+        data = {
+            'question': "What do you see in this image?"
         }
         
-        response = requests.post(f"{service_url}/query", json=payload, timeout=60)
+        response = requests.post(f"{service_url}/query", files=files, data=data, timeout=60)
         assert response.status_code == 200
         
         result = response.json()
@@ -114,14 +121,19 @@ class TestMoondreamService:
         assert isinstance(result["answer"], str)
         assert len(result["answer"]) > 0
     
-    def test_moondream_detect(self, service_url: str, sample_image_url: str):
+    def test_moondream_detect_objects(self, service_url: str, sample_image_url: str):
         """Test Moondream object detection functionality."""
-        payload = {
-            "image_url": sample_image_url,
-            "object": "food"
+        img_response = requests.get(sample_image_url)
+        img_response.raise_for_status()
+        
+        files = {
+            'image': ('test_image.png', img_response.content, 'image/png')
+        }
+        data = {
+            'object': "food"
         }
         
-        response = requests.post(f"{service_url}/detect", json=payload, timeout=60)
+        response = requests.post(f"{service_url}/detect", files=files, data=data, timeout=60)
         assert response.status_code == 200
         
         result = response.json()
@@ -131,14 +143,19 @@ class TestMoondreamService:
         assert isinstance(result["objects"], list)
         assert isinstance(result["count"], int)
     
-    def test_moondream_point(self, service_url: str, sample_image_url: str):
+    def test_moondream_point_objects(self, service_url: str, sample_image_url: str):
         """Test Moondream pointing functionality."""
-        payload = {
-            "image_url": sample_image_url,
-            "object": "food"
+        img_response = requests.get(sample_image_url)
+        img_response.raise_for_status()
+        
+        files = {
+            'image': ('test_image.png', img_response.content, 'image/png')
+        }
+        data = {
+            'object': "food"
         }
         
-        response = requests.post(f"{service_url}/point", json=payload, timeout=60)
+        response = requests.post(f"{service_url}/point", files=files, data=data, timeout=60)
         assert response.status_code == 200
         
         result = response.json()
