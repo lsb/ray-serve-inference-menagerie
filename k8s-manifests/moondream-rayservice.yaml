@@ -1,0 +1,125 @@
+apiVersion: ray.io/v1alpha1
+kind: RayService
+metadata:
+  name: moondream-service
+  namespace: ray-serve-test
+spec:
+  serviceUnhealthySecondThreshold: 300
+  deploymentUnhealthySecondThreshold: 300
+  serveConfigV2: |
+    applications:
+      - name: moondream
+        import_path: app:moondream_service
+        route_prefix: "/"
+  rayClusterConfig:
+    rayVersion: '2.8.0'
+    enableInTreeAutoscaling: true
+    headGroupSpec:
+      rayStartParams:
+        dashboard-host: '0.0.0.0'
+        metrics-export-port: '8080'
+      template:
+        spec:
+          containers:
+            - name: ray-head
+              image: rayproject/ray:2.8.0-py310
+              env:
+                - name: PYTHONPATH
+                  value: "/app"
+              command: ["/bin/bash", "-c"]
+              args:
+                - |
+                  pip install torch==2.0.1 transformers==4.52.4 Pillow requests fastapi uvicorn python-multipart ray[serve]==2.8.0 &&
+                  ray start --head --dashboard-host=0.0.0.0 --metrics-export-port=8080 &&
+                  serve start --http-host=0.0.0.0 --http-port=8000 &&
+                  serve deploy /app/app.py &&
+                  sleep infinity
+              resources:
+                limits:
+                  cpu: 1
+                  memory: 4Gi
+                requests:
+                  cpu: 500m
+                  memory: 2Gi
+              ports:
+                - containerPort: 6379
+                  name: gcs-server
+                - containerPort: 8265
+                  name: dashboard
+                - containerPort: 10001
+                  name: client
+                - containerPort: 8000
+                  name: serve
+                - containerPort: 8080
+                  name: metrics
+              volumeMounts:
+                - mountPath: /tmp/ray
+                  name: ray-logs
+                - mountPath: /app
+                  name: app-code
+          volumes:
+            - name: ray-logs
+              emptyDir: {}
+            - name: app-code
+              configMap:
+                name: moondream-service-code
+    workerGroupSpecs:
+      - replicas: 1
+        minReplicas: 1
+        maxReplicas: 3
+        groupName: small-group
+        rayStartParams: {}
+        template:
+          spec:
+            containers:
+              - name: ray-worker
+                image: rayproject/ray:2.8.0-py310
+                env:
+                  - name: PYTHONPATH
+                    value: "/app"
+                command: ["/bin/bash", "-c"]
+                args:
+                  - |
+                    pip install torch==2.0.1 transformers==4.52.4 Pillow requests fastapi uvicorn python-multipart ray[serve]==2.8.0 &&
+                    ray start --address=$RAY_HEAD_SERVICE_HOST:6379 --block
+                lifecycle:
+                  preStop:
+                    exec:
+                      command: ["/bin/sh","-c","ray stop"]
+                resources:
+                  limits:
+                    cpu: 1
+                    memory: 4Gi
+                  requests:
+                    cpu: 500m
+                    memory: 2Gi
+                volumeMounts:
+                  - mountPath: /tmp/ray
+                    name: ray-logs
+                  - mountPath: /app
+                    name: app-code
+
+            volumes:
+              - name: ray-logs
+                emptyDir: {}
+              - name: app-code
+                configMap:
+                  name: moondream-service-code
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: moondream-service-svc
+  namespace: ray-serve-test
+spec:
+  selector:
+    rayCluster: moondream-service
+    rayNodeType: head
+  ports:
+    - name: serve
+      port: 8000
+      targetPort: 8000
+    - name: dashboard
+      port: 8265
+      targetPort: 8265
+  type: ClusterIP
