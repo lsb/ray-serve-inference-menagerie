@@ -367,7 +367,7 @@ class TestCLIPService:
         except requests.exceptions.ConnectionError:
             pytest.skip("CLIP service is not running. Start the service to run this test.")
     
-    def test_inside_vs_outside_classification(self, service_url: str, cat_image_path: str, inside_vs_outside_labels: list):
+    def test_inside_vs_outside_classification(self, service_url: str, cat_image_path: str, inside_vs_outside_labels: list, image_to_bytes: Callable[[str], bytes]):
         """Test that CLIP correctly identifies cat desk images as inside rather than outside."""
         if not os.path.exists(cat_image_path):
             pytest.skip(f"Cat sample image not found at {cat_image_path}")
@@ -452,7 +452,6 @@ class TestCLIPService:
                 test_image.save(img_buffer, format='JPEG')
                 cat_bytes = img_buffer.getvalue()
             
-            cat_bytes = image_to_bytes(cat_path)
             files = {
                 'image': (f'cat_image_{i+1}.png', cat_bytes, 'image/png')
             }
