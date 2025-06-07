@@ -387,15 +387,15 @@ class TestCLIPService:
             test_image.save(img_buffer, format='JPEG')
             sample_bytes = img_buffer.getvalue()
         
+        cat_bytes = image_to_bytes(cat_image_path)
+        files = {
+            'image': ('cat_image.png', cat_bytes, 'image/png')
+        }
+        data = {
+            'labels': json.dumps(inside_vs_outside_labels)
+        }
+        
         try:
-            cat_bytes = image_to_bytes(cat_image_path)
-            files = {
-                'image': ('cat_image.png', cat_bytes, 'image/png')
-            }
-            data = {
-                'labels': json.dumps(inside_vs_outside_labels)
-            }
-            
             response = requests.post(service_url, files=files, data=data, timeout=30)
             assert response.status_code == 200
             
@@ -454,7 +454,7 @@ class TestCLIPService:
             
             cat_bytes = image_to_bytes(cat_path)
             files = {
-                'image': (cat_file, cat_bytes, 'image/png')
+                'image': (f'cat_image_{i+1}.png', cat_bytes, 'image/png')
             }
             data = {
                 'labels': json.dumps(cat_vs_dog_labels)
