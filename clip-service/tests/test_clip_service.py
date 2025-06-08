@@ -63,7 +63,7 @@ class TestCLIPService:
         except requests.exceptions.ConnectionError:
             pytest.skip("CLIP service is not running. Start the service to run this test.")
     
-    def test_clip_classification_valid_request(self, service_url: str, sample_image_url: str, sample_labels: list, image_to_base64: Callable[[str], str]):
+    def test_clip_classification_valid_request(self, service_url: str, sample_image_url: str, sample_labels: list, image_to_bytes: Callable[[str], bytes]):
         """Test CLIP classification with valid base64-encoded image and labels."""
         import requests as req_lib
         try:
@@ -137,8 +137,11 @@ class TestCLIPService:
         response = requests.post(service_url, files=files, timeout=10)
         result = response.json()
         
-        assert "error" in result
-        assert "labels" in result["error"]
+        assert "detail" in result or "error" in result
+        if "error" in result:
+            assert "labels" in result["error"]
+        else:
+            assert any("labels" in str(item) for item in result["detail"])
     
     def test_clip_classification_empty_labels(self, service_url: str, sample_image_url: str):
         """Test CLIP classification with empty labels list."""

@@ -142,13 +142,15 @@ class CLIPService:
                 }
             )
 
+clip_service = CLIPService.bind()
+
 if __name__ == "__main__":
     import signal
     import time
     
     ray.init()
     serve.start(http_options={"host": "0.0.0.0", "port": int(os.environ.get("PORT", 8000))})
-    serve.run(CLIPService.bind())
+    serve.run(clip_service)
     
     def signal_handler(sig, frame):
         serve.shutdown()
