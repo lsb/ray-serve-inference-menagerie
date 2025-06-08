@@ -31,8 +31,6 @@ spec:
                 - |
                   pip install torch==2.7.0 transformers==4.52.4 Pillow requests fastapi uvicorn python-multipart sam2>=0.4.1 ray[serve]==2.8.0 &&
                   ray start --head --dashboard-host=0.0.0.0 --metrics-export-port=8080 &&
-                  serve start --http-host=0.0.0.0 --http-port=8000 &&
-                  serve deploy /app/app.py &&
                   sleep infinity
               resources:
                 limits:

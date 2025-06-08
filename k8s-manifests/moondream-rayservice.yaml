@@ -22,17 +22,14 @@ spec:
         spec:
           containers:
             - name: ray-head
-              image: rayproject/ray:2.8.0-py310
+              image: ray-libvips:2.8.0-py310
               env:
                 - name: PYTHONPATH
                   value: "/app"
               command: ["/bin/bash", "-c"]
               args:
                 - |
-                  pip install torch==2.0.1 transformers==4.52.4 Pillow requests fastapi uvicorn python-multipart ray[serve]==2.8.0 &&
                   ray start --head --dashboard-host=0.0.0.0 --metrics-export-port=8080 &&
-                  serve start --http-host=0.0.0.0 --http-port=8000 &&
-                  serve deploy /app/app.py &&
                   sleep infinity
               resources:
                 limits:
@@ -73,14 +70,13 @@ spec:
           spec:
             containers:
               - name: ray-worker
-                image: rayproject/ray:2.8.0-py310
+                image: ray-libvips:2.8.0-py310
                 env:
                   - name: PYTHONPATH
                     value: "/app"
                 command: ["/bin/bash", "-c"]
                 args:
                   - |
-                    pip install torch==2.0.1 transformers==4.52.4 Pillow requests fastapi uvicorn python-multipart ray[serve]==2.8.0 &&
                     ray start --address=$RAY_HEAD_SERVICE_HOST:6379 --block
                 lifecycle:
                   preStop:

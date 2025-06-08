@@ -1,0 +1,29 @@
+FROM rayproject/ray:2.8.0-py310
+
+USER root
+
+# Install system dependencies including libvips
+RUN apt-get update && apt-get install -y \
+    libvips-dev \
+    libvips-tools \
+    pkg-config \
+    && rm -rf /var/lib/apt/lists/*
+
+# Switch back to ray user
+USER ray
+
+# Pre-install common Python dependencies to speed up deployment
+RUN pip install --no-cache-dir \
+    torch==2.1.0 \
+    transformers==4.52.4 \
+    Pillow \
+    requests \
+    fastapi \
+    uvicorn \
+    python-multipart \
+    pyvips
+
+# Install Ray with serve separately to ensure proper installation
+RUN pip install --no-cache-dir ray[serve]==2.8.0
+
+WORKDIR /app
