@@ -2,14 +2,13 @@ import os
 import time
 import signal
 import asyncio
-import base64
 import io
 from typing import Dict, Any
 import ray
 from ray import serve
 import torch
 from transformers import pipeline
-from fastapi import FastAPI
+from fastapi import FastAPI, File, UploadFile, Form
 from fastapi.responses import JSONResponse
 from PIL import Image
 
@@ -57,55 +56,40 @@ class GemmaService:
         }
     
     @app.post("/")
-    async def generate_text(self, request_data: Dict[str, Any]) -> JSONResponse:
+    async def generate_text(self, 
+                          image: UploadFile = File(...), 
+                          prompt: str = Form("")) -> JSONResponse:
         start_time = time.time()
         
         try:
-            image_data = request_data.get("image")
-            image_url = request_data.get("image_url")
-            user_prompt = request_data.get("prompt", "") or ""
+            image_data = await image.read()
+            user_prompt = prompt or ""
             
-            if not image_data and not image_url:
+            try:
+                pil_image = Image.open(io.BytesIO(image_data))
+                
+                if pil_image.mode != 'RGB':
+                    pil_image = pil_image.convert('RGB')
+                    
+            except Exception as e:
                 return JSONResponse(
                     status_code=400,
-                    content={"error": "Provide either 'image' (base64-encoded) or 'image_url' (and optionally 'prompt') in request JSON."}
+                    content={
+                        "error": f"Invalid image data: {str(e)}",
+                        "performance": {
+                            "error_time_ms": round((time.time() - start_time) * 1000, 2),
+                            "device_info": self.device_info
+                        }
+                    }
                 )
             
-            if image_data:
-                try:
-                    image_bytes = base64.b64decode(image_data)
-                    image = Image.open(io.BytesIO(image_bytes))
-                    
-                    if image.mode != 'RGB':
-                        image = image.convert('RGB')
-                        
-                except Exception as e:
-                    return JSONResponse(
-                        status_code=400,
-                        content={
-                            "error": f"Invalid base64 image data: {str(e)}",
-                            "performance": {
-                                "error_time_ms": round((time.time() - start_time) * 1000, 2),
-                                "device_info": self.device_info
-                            }
-                        }
-                    )
-                
-                messages = [
-                    {"role": "system", "content": [{"type": "text", "text": "You are a helpful assistant."}]},
-                    {"role": "user", "content": [
-                        {"type": "image", "image": image},
-                        {"type": "text", "text": user_prompt}
-                    ]}
-                ]
-            else:
-                messages = [
-                    {"role": "system", "content": [{"type": "text", "text": "You are a helpful assistant."}]},
-                    {"role": "user", "content": [
-                        {"type": "image", "url": image_url},
-                        {"type": "text", "text": user_prompt}
-                    ]}
-                ]
+            messages = [
+                {"role": "system", "content": [{"type": "text", "text": "You are a helpful assistant."}]},
+                {"role": "user", "content": [
+                    {"type": "image", "image": pil_image},
+                    {"type": "text", "text": user_prompt}
+                ]}
+            ]
             
             inference_start = time.time()
             output = self.pipeline(text=messages, max_new_tokens=200)

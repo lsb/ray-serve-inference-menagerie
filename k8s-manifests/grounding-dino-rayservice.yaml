@@ -1,15 +1,15 @@
 apiVersion: ray.io/v1alpha1
 kind: RayService
 metadata:
-  name: gemma-service
+  name: grounding-dino-service
   namespace: ray-serve-test
 spec:
   serviceUnhealthySecondThreshold: 300
   deploymentUnhealthySecondThreshold: 300
   serveConfigV2: |
     applications:
-      - name: gemma
-        import_path: app:gemma_service
+      - name: grounding-dino
+        import_path: app:grounding_dino_service
         route_prefix: "/"
   rayClusterConfig:
     rayVersion: '2.8.0'
@@ -29,16 +29,16 @@ spec:
               command: ["/bin/bash", "-c"]
               args:
                 - |
-                  pip install torch==2.1.0 transformers==4.52.4 Pillow requests fastapi uvicorn python-multipart ray[serve]==2.8.0 &&
+                  pip install torch==2.7.0 transformers==4.52.4 Pillow requests fastapi uvicorn python-multipart sam2>=0.4.1 ray[serve]==2.8.0 &&
                   ray start --head --dashboard-host=0.0.0.0 --metrics-export-port=8080 &&
                   sleep infinity
               resources:
                 limits:
-                  cpu: 2
-                  memory: 8Gi
-                requests:
                   cpu: 1
                   memory: 4Gi
+                requests:
+                  cpu: 500m
+                  memory: 2Gi
               ports:
                 - containerPort: 6379
                   name: gcs-server
@@ -60,7 +60,7 @@ spec:
               emptyDir: {}
             - name: app-code
               configMap:
-                name: gemma-service-code
+                name: grounding-dino-service-code
     workerGroupSpecs:
       - replicas: 1
         minReplicas: 1
@@ -78,7 +78,7 @@ spec:
                 command: ["/bin/bash", "-c"]
                 args:
                   - |
-                    pip install torch==2.1.0 transformers==4.52.4 Pillow requests fastapi uvicorn python-multipart ray[serve]==2.8.0 &&
+                    pip install torch==2.7.0 transformers==4.52.4 Pillow requests fastapi uvicorn python-multipart sam2>=0.4.1 ray[serve]==2.8.0 &&
                     ray start --address=$RAY_HEAD_SERVICE_HOST:6379 --block
                 lifecycle:
                   preStop:
@@ -86,39 +86,32 @@ spec:
                       command: ["/bin/sh","-c","ray stop"]
                 resources:
                   limits:
-                    cpu: 2
-                    memory: 8Gi
-                    nvidia.com/gpu: 1
-                  requests:
                     cpu: 1
                     memory: 4Gi
-                    nvidia.com/gpu: 1
+                  requests:
+                    cpu: 500m
+                    memory: 2Gi
                 volumeMounts:
                   - mountPath: /tmp/ray
                     name: ray-logs
                   - mountPath: /app
                     name: app-code
-            nodeSelector:
-              accelerator: "nvidia-tesla-t4"
-            tolerations:
-              - key: "nvidia.com/gpu"
-                operator: "Exists"
-                effect: "NoSchedule"
+
             volumes:
               - name: ray-logs
                 emptyDir: {}
               - name: app-code
                 configMap:
-                  name: gemma-service-code
+                  name: grounding-dino-service-code
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: gemma-service-svc
+  name: grounding-dino-service-svc
   namespace: ray-serve-test
 spec:
   selector:
-    rayCluster: gemma-service
+    rayCluster: grounding-dino-service
     rayNodeType: head
   ports:
     - name: serve

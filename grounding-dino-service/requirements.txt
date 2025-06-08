@@ -1,0 +1,11 @@
+# Grounding DINO Service specific dependencies
+ray[serve]==2.46.0
+torch==2.7.0
+transformers==4.52.4
+Pillow>=9.0.0
+requests>=2.28.0
+fastapi>=0.100.0
+uvicorn>=0.20.0
+python-multipart>=0.0.6
+# SAM2 specific dependencies
+sam2>=0.4.1

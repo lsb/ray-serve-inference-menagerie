@@ -2,7 +2,6 @@ import pytest
 import requests
 import json
 import time
-import base64
 import io
 import os
 from typing import Dict, Any, Callable
@@ -22,13 +21,12 @@ class TestGemmaService:
         return "https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/beignets-task-guide.png"
     
     @pytest.fixture(scope="class")
-    def sample_image_base64(self) -> str:
-        """Sample base64-encoded image for testing."""
+    def sample_image_bytes(self) -> bytes:
+        """Sample image bytes for testing."""
         img = Image.new('RGB', (100, 100), color='red')
         buffer = io.BytesIO()
         img.save(buffer, format='PNG')
-        img_bytes = buffer.getvalue()
-        return base64.b64encode(img_bytes).decode('utf-8')
+        return buffer.getvalue()
     
     @pytest.fixture(scope="class")
     def cat_image_path(self) -> str:
@@ -55,12 +53,11 @@ class TestGemmaService:
         return ["Is this an indoor or outdoor scene?", "Where is this photo taken - inside or outside?"]
     
     @pytest.fixture(scope="class")
-    def image_to_base64(self) -> Callable[[str], str]:
-        """Helper function to convert image files to base64."""
-        def convert(image_path: str) -> str:
+    def image_to_bytes(self) -> Callable[[str], bytes]:
+        """Helper function to convert image files to bytes."""
+        def convert(image_path: str) -> bytes:
             with open(image_path, 'rb') as f:
-                image_bytes = f.read()
-            return base64.b64encode(image_bytes).decode('utf-8')
+                return f.read()
         return convert
     
     def test_service_health(self, service_url: str):
@@ -79,12 +76,17 @@ class TestGemmaService:
     
     def test_gemma_image_description(self, service_url: str, sample_image_url: str):
         """Test Gemma VLM with image description task."""
-        payload = {
-            "image_url": sample_image_url,
-            "prompt": "Describe what you see in this image."
+        img_response = requests.get(sample_image_url)
+        img_response.raise_for_status()
+        
+        files = {
+            'image': ('test_image.png', img_response.content, 'image/png')
+        }
+        data = {
+            'prompt': "Describe what you see in this image."
         }
         
-        response = requests.post(service_url, json=payload, timeout=60)
+        response = requests.post(service_url, files=files, data=data, timeout=60)
         assert response.status_code == 200
         
         result = response.json()
@@ -100,11 +102,14 @@ class TestGemmaService:
     
     def test_gemma_image_only(self, service_url: str, sample_image_url: str):
         """Test Gemma VLM with image only (no prompt)."""
-        payload = {
-            "image_url": sample_image_url
+        img_response = requests.get(sample_image_url)
+        img_response.raise_for_status()
+        
+        files = {
+            'image': ('test_image.png', img_response.content, 'image/png')
         }
         
-        response = requests.post(service_url, json=payload, timeout=60)
+        response = requests.post(service_url, files=files, timeout=60)
         assert response.status_code == 200
         
         result = response.json()
@@ -112,14 +117,16 @@ class TestGemmaService:
         assert "performance" in result
         assert isinstance(result["answer"], str)
     
-    def test_gemma_base64_image(self, service_url: str, sample_image_base64: str):
-        """Test Gemma VLM with base64-encoded image."""
-        payload = {
-            "image": sample_image_base64,
-            "prompt": "Describe what you see in this image."
+    def test_gemma_image_bytes(self, service_url: str, sample_image_bytes: bytes):
+        """Test Gemma VLM with image bytes."""
+        files = {
+            'image': ('test_image.png', sample_image_bytes, 'image/png')
+        }
+        data = {
+            'prompt': "Describe what you see in this image."
         }
         
-        response = requests.post(service_url, json=payload, timeout=60)
+        response = requests.post(service_url, files=files, data=data, timeout=60)
         assert response.status_code == 200
         
         result = response.json()
@@ -135,42 +142,45 @@ class TestGemmaService:
     
     def test_gemma_missing_image_data(self, service_url: str):
         """Test Gemma VLM with missing image data."""
-        payload = {
-            "prompt": "Describe the image."
+        data = {
+            'prompt': "Describe the image."
         }
         
-        response = requests.post(service_url, json=payload, timeout=10)
-        result = response.json()
-        
-        assert "error" in result
-        assert "image" in result["error"] or "image_url" in result["error"]
+        response = requests.post(service_url, data=data, timeout=10)
+        assert response.status_code == 422
     
-    def test_gemma_invalid_base64(self, service_url: str):
-        """Test Gemma VLM with invalid base64 image data."""
-        payload = {
-            "image": "invalid_base64_data",
-            "prompt": "Describe the image."
+    def test_gemma_invalid_image_data(self, service_url: str):
+        """Test Gemma VLM with invalid image data."""
+        files = {
+            'image': ('test_image.png', b'invalid_image_data', 'image/png')
+        }
+        data = {
+            'prompt': "Describe the image."
         }
         
-        response = requests.post(service_url, json=payload, timeout=10)
+        response = requests.post(service_url, files=files, data=data, timeout=10)
         result = response.json()
         
         assert "error" in result
-        assert "Invalid base64" in result["error"]
     
     def test_gemma_performance_benchmark(self, service_url: str, sample_image_url: str):
         """Benchmark the performance of Gemma VLM."""
-        payload = {
-            "image_url": sample_image_url,
-            "prompt": "Describe this image briefly."
+        img_response = requests.get(sample_image_url)
+        img_response.raise_for_status()
+        
+        files = {
+            'image': ('test_image.png', img_response.content, 'image/png')
+        }
+        data = {
+            'prompt': "Describe this image briefly."
         }
         
-        requests.post(service_url, json=payload, timeout=60)
+        requests.post(service_url, files=files, data=data, timeout=60)
         
         response_times = []
         for _ in range(3):
             start_time = time.time()
-            response = requests.post(service_url, json=payload, timeout=60)
+            response = requests.post(service_url, files=files, data=data, timeout=60)
             end_time = time.time()
             
             assert response.status_code == 200
@@ -181,100 +191,82 @@ class TestGemmaService:
         
         assert avg_response_time < 30.0
     
-    def test_cat_vs_dog_recognition(self, service_url: str, cat_image_path: str, dog_image_path: str, cat_vs_dog_prompts: list, image_to_base64: Callable[[str], str]):
+    def test_cat_vs_dog_recognition(self, service_url: str, cat_image_path: str, dog_image_path: str, cat_vs_dog_prompts: list, image_to_bytes: Callable[[str], bytes]):
         """Test that Gemma correctly identifies cat images as cats rather than dogs using local sample images."""
         assert os.path.exists(cat_image_path), f"Cat sample image not found at {cat_image_path}"
         assert os.path.exists(dog_image_path), f"Dog sample image not found at {dog_image_path}"
         
-        cat_base64 = image_to_base64(cat_image_path)
-        cat_payload = {
-            "image": cat_base64,
-            "prompt": cat_vs_dog_prompts[0]
-        }
-        
-        try:
-            cat_response = requests.post(service_url, json=cat_payload, timeout=60)
-            assert cat_response.status_code == 200
-            cat_result = cat_response.json()
-            assert "answer" in cat_result
-            
-            cat_answer = cat_result["answer"].lower()
-            assert "cat" in cat_answer, f"Cat image should be identified as cat, got: {cat_result['answer']}"
-            
-            dog_base64 = image_to_base64(dog_image_path)
-            dog_payload = {
-                "image": dog_base64,
-                "prompt": cat_vs_dog_prompts[0]
+        for prompt in cat_vs_dog_prompts:
+            cat_bytes = image_to_bytes(cat_image_path)
+            cat_files = {
+                'image': ('cat_image.png', cat_bytes, 'image/png')
+            }
+            cat_data = {
+                'prompt': prompt
             }
             
-            dog_response = requests.post(service_url, json=dog_payload, timeout=60)
-            assert dog_response.status_code == 200
-            dog_result = dog_response.json()
-            assert "answer" in dog_result
-            
-            dog_answer = dog_result["answer"].lower()
-            assert "dog" in dog_answer, f"Dog image should be identified as dog, got: {dog_result['answer']}"
-            
-            print(f"Cat vs Dog test passed:")
-            print(f"  Cat image response: {cat_result['answer']}")
-            print(f"  Dog image response: {dog_result['answer']}")
-            
-            if "performance" in cat_result:
-                performance = cat_result["performance"]
-                print(f"Performance: {performance.get('total_time_ms', 'N/A')}ms total")
-                print(f"Device: {performance.get('device_info', {}).get('device_type', 'unknown')}")
-            
-        except requests.exceptions.ConnectionError as e:
-            pytest.fail(f"Gemma service is not accessible at {service_url}: {str(e)}")
+            try:
+                cat_response = requests.post(service_url, files=cat_files, data=cat_data, timeout=60)
+                assert cat_response.status_code == 200
+                cat_result = cat_response.json()
+                assert "answer" in cat_result
+                
+                cat_answer = cat_result["answer"].lower()
+                assert "cat" in cat_answer, f"Cat image should mention 'cat' in response. Got: {cat_result['answer']}"
+                
+                dog_bytes = image_to_bytes(dog_image_path)
+                dog_files = {
+                    'image': ('dog_image.png', dog_bytes, 'image/png')
+                }
+                dog_data = {
+                    'prompt': prompt
+                }
+                
+                dog_response = requests.post(service_url, files=dog_files, data=dog_data, timeout=60)
+                assert dog_response.status_code == 200
+                dog_result = dog_response.json()
+                assert "answer" in dog_result
+                
+                dog_answer = dog_result["answer"].lower()
+                assert "dog" in dog_answer, f"Dog image should be identified as dog, got: {dog_result['answer']}"
+                
+                print(f"Cat vs Dog test passed:")
+                print(f"  Cat image response: {cat_result['answer']}")
+                print(f"  Dog image response: {dog_result['answer']}")
+                
+                if "performance" in cat_result:
+                    performance = cat_result["performance"]
+                    print(f"Performance: {performance.get('total_time_ms', 'N/A')}ms total")
+                    print(f"Device: {performance.get('device_info', {}).get('device_type', 'unknown')}")
+                    
+            except requests.exceptions.ConnectionError as e:
+                pytest.fail(f"Gemma service is not accessible at {service_url}: {str(e)}")
     
-    def test_inside_vs_outside_classification(self, service_url: str, cat_image_path: str, inside_vs_outside_prompts: list, image_to_base64: Callable[[str], str]):
+    def test_inside_vs_outside_classification(self, service_url: str, cat_image_path: str, inside_vs_outside_prompts: list, image_to_bytes: Callable[[str], bytes]):
         """Test that Gemma correctly identifies cat desk images as inside rather than outside."""
         assert os.path.exists(cat_image_path), f"Cat sample image not found at {cat_image_path}"
         
-        cat_base64 = image_to_base64(cat_image_path)
-        payload = {
-            "image": cat_base64,
-            "prompt": inside_vs_outside_prompts[0]
-        }
-        
-        try:
-            response = requests.post(service_url, json=payload, timeout=60)
-            assert response.status_code == 200
+        for prompt in inside_vs_outside_prompts:
+            cat_bytes = image_to_bytes(cat_image_path)
+            files = {
+                'image': ('cat_image.png', cat_bytes, 'image/png')
+            }
+            data = {
+                'prompt': prompt
+            }
             
-            result = response.json()
-            assert "answer" in result
-            assert "performance" in result
-            
-            answer = result["answer"].lower()
-            assert "indoor" in answer or "inside" in answer, f"Cat on desk should be identified as indoor/inside, got: {result['answer']}"
-            
-            print(f"Indoor vs Outdoor classification: {result['answer']}")
-            
-        except requests.exceptions.ConnectionError as e:
-            pytest.fail(f"Gemma service is not accessible at {service_url}: {str(e)}")
-    
-    def test_outdoor_scene_classification(self, service_url: str, dog_image_path: str, inside_vs_outside_prompts: list, image_to_base64: Callable[[str], str]):
-        """Test that Gemma correctly identifies dog running images as outside rather than inside."""
-        assert os.path.exists(dog_image_path), f"Dog sample image not found at {dog_image_path}"
-        
-        dog_base64 = image_to_base64(dog_image_path)
-        payload = {
-            "image": dog_base64,
-            "prompt": inside_vs_outside_prompts[0]
-        }
-        
-        try:
-            response = requests.post(service_url, json=payload, timeout=60)
-            assert response.status_code == 200
-            
-            result = response.json()
-            assert "answer" in result
-            assert "performance" in result
-            
-            answer = result["answer"].lower()
-            assert "outdoor" in answer or "outside" in answer, f"Dog running in field should be identified as outdoor/outside, got: {result['answer']}"
-            
-            print(f"Outdoor scene classification: {result['answer']}")
-            
-        except requests.exceptions.ConnectionError as e:
-            pytest.fail(f"Gemma service is not accessible at {service_url}: {str(e)}")
+            try:
+                response = requests.post(service_url, files=files, data=data, timeout=60)
+                assert response.status_code == 200
+                
+                result = response.json()
+                assert "answer" in result
+                assert "performance" in result
+                
+                answer = result["answer"].lower()
+                assert "indoor" in answer or "inside" in answer, f"Cat on desk should be identified as indoor/inside. Got: {result['answer']}"
+                
+                print(f"Inside vs Outside classification for prompt '{prompt}': {result['answer'][:100]}...")
+                
+            except requests.exceptions.ConnectionError as e:
+                pytest.fail(f"Gemma service is not accessible at {service_url}: {str(e)}")

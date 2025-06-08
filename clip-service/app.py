@@ -2,14 +2,13 @@ import os
 import time
 import signal
 import asyncio
-import base64
 import io
 from typing import Dict, Any, List
 import ray
 from ray import serve
 import torch
 from transformers import pipeline
-from fastapi import FastAPI
+from fastapi import FastAPI, File, UploadFile, Form
 from fastapi.responses import JSONResponse
 from PIL import Image
 
@@ -59,38 +58,53 @@ class CLIPService:
         }
     
     @app.post("/")
-    async def classify_image(self, request_data: Dict[str, Any]) -> JSONResponse:
+    async def classify_image(self, 
+                           image: UploadFile = File(...), 
+                           labels: str = Form(...)) -> JSONResponse:
         """Main classification endpoint."""
         start_time = time.time()
         
         try:
-            image_data = request_data.get("image")
-            candidate_labels = request_data.get("labels")
+            image_data = await image.read()
             
-            if not image_data or not candidate_labels:
+            try:
+                import json
+                candidate_labels = json.loads(labels)
+            except json.JSONDecodeError:
                 return JSONResponse(
                     status_code=400,
-                    content={"error": "Provide 'image' (base64-encoded) and 'labels' in request JSON."}
+                    content={
+                        "error": "Labels must be a valid JSON array string.",
+                        "performance": {
+                            "error_time_ms": round((time.time() - start_time) * 1000, 2),
+                            "device_info": self.device_info
+                        }
+                    }
                 )
             
             if not isinstance(candidate_labels, list) or len(candidate_labels) == 0:
                 return JSONResponse(
                     status_code=400,
-                    content={"error": "Labels must be a non-empty list."}
+                    content={
+                        "error": "Labels must be a non-empty list.",
+                        "performance": {
+                            "error_time_ms": round((time.time() - start_time) * 1000, 2),
+                            "device_info": self.device_info
+                        }
+                    }
                 )
             
             try:
-                image_bytes = base64.b64decode(image_data)
-                image = Image.open(io.BytesIO(image_bytes))
+                pil_image = Image.open(io.BytesIO(image_data))
                 
-                if image.mode != 'RGB':
-                    image = image.convert('RGB')
+                if pil_image.mode != 'RGB':
+                    pil_image = pil_image.convert('RGB')
                     
             except Exception as e:
                 return JSONResponse(
                     status_code=400,
                     content={
-                        "error": f"Invalid base64 image data: {str(e)}",
+                        "error": f"Invalid image data: {str(e)}",
                         "performance": {
                             "error_time_ms": round((time.time() - start_time) * 1000, 2),
                             "device_info": self.device_info
@@ -99,7 +113,7 @@ class CLIPService:
                 )
             
             inference_start = time.time()
-            result = self.pipeline(image, candidate_labels=candidate_labels)
+            result = self.pipeline(pil_image, candidate_labels=candidate_labels)
             inference_time = time.time() - inference_start
             
             total_time = time.time() - start_time
@@ -128,13 +142,15 @@ class CLIPService:
                 }
             )
 
+clip_service = CLIPService.bind()
+
 if __name__ == "__main__":
     import signal
     import time
     
     ray.init()
     serve.start(http_options={"host": "0.0.0.0", "port": int(os.environ.get("PORT", 8000))})
-    serve.run(CLIPService.bind())
+    serve.run(clip_service)
     
     def signal_handler(sig, frame):
         serve.shutdown()
